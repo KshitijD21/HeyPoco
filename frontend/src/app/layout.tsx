@@ -1,0 +1,26 @@
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+import { QueryProvider } from "@/providers/query-provider";
+
+const inter = Inter({ subsets: ["latin"] });
+
+export const metadata: Metadata = {
+  title: "HeyPoco — Speak your life once, access it anytime",
+  description:
+    "Voice-first personal life logger. Speak naturally. The app understands, remembers, and reflects it back to you intelligently.",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en" className="dark">
+      <body className={`${inter.className} bg-zinc-950 text-zinc-100 antialiased`}>
+        <QueryProvider>{children}</QueryProvider>
+      </body>
+    </html>
+  );
+}
