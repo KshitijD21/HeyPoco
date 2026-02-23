@@ -1,13 +1,13 @@
-from __future__ import annotations
-
 import json
+from typing import Dict, List, Optional
+
 from openai import AsyncOpenAI
 
 from app.config import get_settings
 from app.models.entry import EntryType, ExtractedFields
 
 
-_client: AsyncOpenAI | None = None
+_client: Optional[AsyncOpenAI] = None
 
 
 def get_openai_client() -> AsyncOpenAI:
@@ -67,7 +67,7 @@ async def transcribe_audio(audio_bytes: bytes, filename: str = "audio.webm") -> 
     return transcript.strip()
 
 
-async def extract_entry(raw_text: str) -> dict:
+async def extract_entry(raw_text: str) -> Dict:
     """Extract structured fields from raw text using GPT-4o."""
     client = get_openai_client()
     settings = get_settings()
@@ -96,7 +96,7 @@ async def extract_entry(raw_text: str) -> dict:
     }
 
 
-async def generate_embedding(text: str) -> list[float]:
+async def generate_embedding(text: str) -> List[float]:
     """Generate a text embedding using OpenAI's embedding model."""
     client = get_openai_client()
     settings = get_settings()
@@ -109,7 +109,7 @@ async def generate_embedding(text: str) -> list[float]:
     return response.data[0].embedding
 
 
-async def answer_query(question: str, context_entries: list[dict]) -> str:
+async def answer_query(question: str, context_entries: List[Dict]) -> str:
     """Answer a natural language question using entry context."""
     client = get_openai_client()
     settings = get_settings()

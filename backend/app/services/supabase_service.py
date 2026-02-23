@@ -1,7 +1,6 @@
-from __future__ import annotations
-
 import uuid
 from datetime import datetime
+from typing import Dict, List, Optional, Tuple
 
 from supabase import AsyncClient, acreate_client
 
@@ -9,7 +8,7 @@ from app.config import get_settings
 from app.models.entry import EntryType
 
 
-_client: AsyncClient | None = None
+_client: Optional[AsyncClient] = None
 
 
 async def get_supabase_client() -> AsyncClient:
@@ -39,11 +38,11 @@ async def create_entry(
     user_id: str,
     entry_type: EntryType,
     raw_text: str,
-    extracted_fields: dict,
-    tags: list[str],
-    attachments: list[str] | None = None,
-    embedding: list[float] | None = None,
-) -> dict:
+    extracted_fields: Dict,
+    tags: List[str],
+    attachments: Optional[List[str]] = None,
+    embedding: Optional[List[float]] = None,
+) -> Dict:
     """Insert a new entry into the database."""
     client = await get_supabase_client()
 
@@ -69,14 +68,14 @@ async def create_entry(
 
 async def get_entries(
     user_id: str,
-    entry_type: EntryType | None = None,
-    tag: str | None = None,
-    date_from: datetime | None = None,
-    date_to: datetime | None = None,
-    search: str | None = None,
+    entry_type: Optional[EntryType] = None,
+    tag: Optional[str] = None,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+    search: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
-) -> tuple[list[dict], int]:
+) -> Tuple[List[Dict], int]:
     """Fetch entries for a user with optional filters. Returns (entries, total_count)."""
     client = await get_supabase_client()
 
@@ -104,7 +103,7 @@ async def get_entries(
     return result.data or [], result.count or 0
 
 
-async def get_entry_by_id(user_id: str, entry_id: str) -> dict | None:
+async def get_entry_by_id(user_id: str, entry_id: str) -> Optional[Dict]:
     """Fetch a single entry by ID, scoped to user."""
     client = await get_supabase_client()
 
@@ -120,7 +119,7 @@ async def get_entry_by_id(user_id: str, entry_id: str) -> dict | None:
     return result.data
 
 
-async def update_entry(user_id: str, entry_id: str, updates: dict) -> dict:
+async def update_entry(user_id: str, entry_id: str, updates: Dict) -> Dict:
     """Update an existing entry. Only non-None fields are applied."""
     client = await get_supabase_client()
 
@@ -158,9 +157,9 @@ async def delete_entry(user_id: str, entry_id: str) -> bool:
 
 async def search_entries_by_embedding(
     user_id: str,
-    embedding: list[float],
+    embedding: List[float],
     match_count: int = 10,
-) -> list[dict]:
+) -> List[Dict]:
     """Find the most relevant entries using vector similarity (cosine distance).
     Requires the `match_entries` Postgres function defined in schema.sql."""
     client = await get_supabase_client()

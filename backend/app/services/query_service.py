@@ -1,14 +1,14 @@
-from __future__ import annotations
+from typing import Dict, List
 
 from app.services.openai_service import answer_query, generate_embedding
 from app.services.supabase_service import search_entries_by_embedding
 
 
-async def query_entries(user_id: str, question: str) -> dict:
+async def query_entries(user_id: str, question: str) -> Dict:
     """Full RAG pipeline: embed question → vector search → GPT-4o answer.
 
     Returns:
-        dict with keys: answer (str), sources (list[dict]), has_data (bool)
+        dict with keys: answer (str), sources (List[Dict]), has_data (bool)
     """
     # Step 1: Embed the user's question
     question_embedding = await generate_embedding(question)

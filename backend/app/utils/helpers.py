@@ -1,6 +1,5 @@
-from __future__ import annotations
-
 from datetime import datetime
+from typing import Optional
 
 
 def format_currency(amount: float, currency: str = "USD") -> str:
@@ -10,7 +9,7 @@ def format_currency(amount: float, currency: str = "USD") -> str:
     return f"{symbol}{amount:,.2f}"
 
 
-def safe_parse_datetime(value: str | None) -> datetime | None:
+def safe_parse_datetime(value: Optional[str]) -> Optional[datetime]:
     """Attempt to parse a datetime string, return None on failure."""
     if not value:
         return None

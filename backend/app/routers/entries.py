@@ -1,4 +1,4 @@
-from __future__ import annotations
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -25,11 +25,11 @@ router = APIRouter(prefix="/api/entries", tags=["entries"])
 @router.get("", response_model=EntryListResponse)
 async def list_entries(
     user_id: str = Depends(get_current_user_id),
-    type: EntryType | None = None,
-    tag: str | None = None,
-    date_from: str | None = None,
-    date_to: str | None = None,
-    search: str | None = None,
+    type: Optional[EntryType] = None,
+    tag: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    search: Optional[str] = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> EntryListResponse:
