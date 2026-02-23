@@ -19,8 +19,11 @@ interface ChatMessage {
 const MOCK_VOICE_LOGS = [
     { text: "I spent $12 on coffee at Starbucks.", reply: "Got it. $12.00 tracked.", category: "EXPENSE" },
     { text: "Remind me to call Mom tomorrow at 5pm.", reply: "Commitment noted.", category: "COMMITMENT" },
+    { text: "How much did I spend today?", reply: "You've spent $147.00 so far today across 3 entries.", category: "QUERY" },
     { text: "Met Sarah for lunch, we talked about the project.", reply: "Event logged.", category: "EVENT" },
+    { text: "What do I have tomorrow?", reply: "You have 2 commitments tomorrow: Call Mom at 5pm and Go to the gym at 6pm.", category: "QUERY" },
     { text: "Paid $50 for dinner, shared with John and Mike.", reply: "Got it. $50.00 tracked.", category: "EXPENSE" },
+    { text: "Summary of my coffee expenses?", reply: "You've visited Starbucks twice this week, spending a total of $24.00.", category: "QUERY" },
     { text: "Going to the gym at 6pm today.", reply: "Commitment noted.", category: "COMMITMENT" },
     { text: "Bought groceries for $85.", reply: "Got it. $85.00 tracked.", category: "EXPENSE" },
     { text: "Applied to the product manager role at Stripe.", reply: "Career entry saved.", category: "NOTE" },
@@ -32,6 +35,21 @@ const TEXT_REPLIES: Record<string, { reply: string; category: string }> = {
 
 function getTextReply(text: string): { reply: string; category: string } {
     const lower = text.toLowerCase();
+
+    // Check for questions/queries
+    if (lower.includes("how much") || lower.includes("what") || lower.includes("summary") || lower.includes("list") || lower.includes("show me")) {
+        if (lower.includes("spend") || lower.includes("spent") || lower.includes("expensive") || lower.includes("price") || lower.includes("cost")) {
+            return { reply: "You've spent $147.00 so far today across 3 entries.", category: "QUERY" };
+        }
+        if (lower.includes("tomorrow") || lower.includes("next") || lower.includes("schedule") || lower.includes("todo")) {
+            return { reply: "You have 2 commitments tomorrow: Call Mom at 5pm and Go to the gym at 6pm.", category: "QUERY" };
+        }
+        if (lower.includes("coffee") || lower.includes("starbucks")) {
+            return { reply: "You've visited Starbucks twice this week, spending a total of $24.00.", category: "QUERY" };
+        }
+        return { reply: "I've pulled up your recent logs for you.", category: "QUERY" };
+    }
+
     if (lower.includes("$") || lower.includes("spent") || lower.includes("paid") || lower.includes("bought")) {
         const match = text.match(/\$?(\d+(?:\.\d{2})?)/);
         const amount = match ? `$${parseFloat(match[1]).toFixed(2)}` : "";
@@ -51,6 +69,7 @@ const CATEGORY_COLORS: Record<string, string> = {
     COMMITMENT: "#4ecdc4",
     EVENT: "#a66cff",
     NOTE: "#95a5a6",
+    QUERY: "#3b82f6", // Blue for queries
 };
 
 /* ─── Component ──────────────────────────────────────────────────────────── */
@@ -197,8 +216,8 @@ export default function ZenModePage() {
                             )}
                             <div
                                 className={`max-w-[85%] px-5 py-3.5 text-[15px] leading-relaxed font-light shadow-sm ${msg.sender === "user"
-                                        ? "bg-[#2d2d2d] text-white rounded-2xl rounded-br-sm"
-                                        : "bg-white border border-[#e5e5e5]/50 text-[#1a1a1a] rounded-2xl rounded-bl-sm"
+                                    ? "bg-[#2d2d2d] text-white rounded-2xl rounded-br-sm"
+                                    : "bg-white border border-[#e5e5e5]/50 text-[#1a1a1a] rounded-2xl rounded-bl-sm"
                                     }`}
                             >
                                 {msg.text}
@@ -295,10 +314,10 @@ export default function ZenModePage() {
                                 onClick={toggleListening}
                                 disabled={processing}
                                 className={`relative w-[72px] h-[72px] rounded-full flex items-center justify-center shadow-2xl transition-all duration-500 z-10 ${isListening
-                                        ? "bg-[#ef4444] text-white scale-110"
-                                        : processing
-                                            ? "bg-[#e5e5e5] text-[#737373] cursor-not-allowed"
-                                            : "bg-[#1a1a1a] text-white hover:scale-105"
+                                    ? "bg-[#ef4444] text-white scale-110"
+                                    : processing
+                                        ? "bg-[#e5e5e5] text-[#737373] cursor-not-allowed"
+                                        : "bg-[#1a1a1a] text-white hover:scale-105"
                                     }`}
                             >
                                 <AnimatePresence mode="wait">
