@@ -19,6 +19,11 @@
 - [x] Write database schema + migrations
 - [x] Set up project tracking (.project/)
 - [x] Write root README
+- [x] Redesign Login Page with Zen aesthetics
+- [x] Implement continuous voice/chat interface interaction
+- [x] Implement basic interaction rich cards (Expenses, Schedules, Summaries)
+- [x] Add social login (Google) visual option
+- [x] Refine scroll blurs and immersive end-to-end layout
 
 ## Notes
 - This sprint focused purely on scaffolding — no runtime testing yet
