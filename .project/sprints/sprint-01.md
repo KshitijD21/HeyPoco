@@ -21,7 +21,8 @@
 - [x] Write root README
 - [x] Redesign Login Page with Zen aesthetics
 - [x] Implement continuous voice/chat interface interaction
-- [x] Implement basic interaction rich cards (Expenses, Schedules, Summaries)
+- [x] Implement 11-card Master Component Library (Career, Health, Travel, Finance, etc.)
+- [x] Create Visual Language Showcase at `/experiments/components`
 - [x] Add social login (Google) visual option
 - [x] Refine scroll blurs and immersive end-to-end layout
 
