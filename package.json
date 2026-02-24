@@ -1,0 +1,17 @@
+{
+    "name": "heypoco",
+    "version": "0.1.0",
+    "private": true,
+    "packageManager": "pnpm@10.12.1",
+    "scripts": {
+        "dev": "concurrently -n \"frontend,backend\" -c \"cyan.bold,green.bold\" \"pnpm dev:frontend\" \"pnpm dev:backend\"",
+        "dev:frontend": "cd frontend && pnpm dev",
+        "dev:backend": "cd backend && venv/bin/uvicorn app.main:app --reload --port 8888",
+        "build": "cd frontend && pnpm build",
+        "lint": "cd frontend && pnpm lint",
+        "install:backend": "cd backend && pip install -r requirements.txt"
+    },
+    "devDependencies": {
+        "concurrently": "^9.1.2"
+    }
+}

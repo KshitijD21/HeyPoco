@@ -29,7 +29,13 @@
 - [x] Expand Master Component Library to 21 rich cards (AI States, Lifestyle, Academic, Professional, Vault)
 - [x] Update `.project/use-cases.md` with 18 comprehensive lifecycle categories
 - [x] Verify visual language consistency across all showcase components
+- [x] Migrate from npm to pnpm across the project - Kshitij - 02/24/2026
+- [x] Set up root `package.json` as orchestrator to run frontend + backend concurrently via `pnpm dev` - Kshitij - 02/24/2026
+- [x] Assign unique dev ports — frontend `:3333`, backend `:8888` - Kshitij - 02/24/2026
+- [x] Fix `.gitignore` — untrack `backend/venv` and `backend/.env` that were committed from another machine - Kshitij - 02/24/2026
+- [x] Update CORS origins to include `localhost:3333` - Kshitij - 02/24/2026
 
 ## Notes
+
 - This sprint focused purely on scaffolding — no runtime testing yet
 - Next sprint should focus on Supabase project setup and end-to-end testing

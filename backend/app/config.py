@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     # App
     app_name: str = "HeyPoco API"
     debug: bool = False
-    cors_origins: list[str] = ["http://localhost:3000"]
+    cors_origins: list[str] = ["http://localhost:3333", "http://localhost:3000"]
 
     # Supabase
     supabase_url: str
