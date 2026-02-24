@@ -37,41 +37,35 @@ A **voice-first personal life logger**. You speak naturally. The app understands
 One tap, speak naturally, done. The app accepts any natural sentence about anything that happened, is planned, or needs to be remembered. No command syntax. No structure required from the user.
 
 ### 2. AI Understanding
-Every log is processed silently. The app identifies what type of entry it is — expense, commitment, event, or general note — and extracts the relevant data: amount, person, date, duration, merchant. **The user never manually categorizes anything.**
+Every log is processed silently. The app identifies what type of entry it is — **finance**, **event**, or **general** — and extracts the relevant data: amount, merchant, person, date, duration, location. Finer-grained labels (career, commitment, health, etc.) are applied as tags. **The user never manually categorizes anything.**
 
 ### 3. Expense Awareness
 Logged expenses accumulate automatically by week and rough category. If a shared cost is involved — *"I paid $50 for the three of us"* — the app asks one clarifying question, tracks what others owe you, and closes the balance when repayment is logged. Your expense picture is always honest, not inflated by costs others actually covered.
 
 ### 4. Commitment Tracking
-When you say you will do something, the app holds it. No aggressive reminders. It simply surfaces open commitments in your Morning Snapshot so nothing quietly disappears.
+When you say you will do something, the app holds it. No aggressive reminders.
 
 ### 5. Daily Feed
 A clean chronological view of everything logged on any given day. The single answer to *"what did I actually do today?"*
 
-### 6. Morning Snapshot
-The default view when you open the app before midday. Shows:
-- Open commitments
-- Anything time-stamped for today
-- A one-line summary of yesterday
-
 Scannable in under **30 seconds**.
 
-### 7. Weekly Summary
+### 6. Weekly Summary
 Every Sunday, a short plain-language paragraph generated from your week's logs. Where your money went. Where your time went. What you committed to and whether you followed through. **No charts. Just an honest mirror.**
 
-### 8. Query Interface
+### 7. Query Interface
 Ask your own data natural questions:
 - *"How much did I spend on food this month?"*
 - *"When did I last see Ahmed?"*
 - *"What did I plan to do this week?"*
 
-Answered from your logs, never fabricated. If the data isn't there, the app says so.
+Answered from your logs using semantic search. When an exact match exists, the app answers directly. When it doesn't — for example, asking about "coffee" when only "Zigle's" is logged — the app surfaces the most related entries and is transparent about what it knows vs. what it's inferring. **Never fabricates. Never goes silent.**
 
-### 9. Security
-- Local-first storage — data lives on your device
-- AES-256 encryption
+### 8. Security
+- Data stored securely in the cloud (Supabase — PostgreSQL with Row-Level Security)
+- Each user's data is fully isolated at the database layer
 - Biometric app lock
-- Nothing uploaded without your explicit action
+- No data shared with or visible to other users
 
 ---
 
