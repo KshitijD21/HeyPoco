@@ -25,6 +25,10 @@
 - [x] Create Visual Language Showcase at `/experiments/components`
 - [x] Add social login (Google) visual option
 - [x] Refine scroll blurs and immersive end-to-end layout
+- [x] Redesign Signup Page with Zen aesthetics
+- [x] Expand Master Component Library to 21 rich cards (AI States, Lifestyle, Academic, Professional, Vault)
+- [x] Update `.project/use-cases.md` with 18 comprehensive lifecycle categories
+- [x] Verify visual language consistency across all showcase components
 
 ## Notes
 - This sprint focused purely on scaffolding — no runtime testing yet

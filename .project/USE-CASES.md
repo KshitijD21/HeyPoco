@@ -44,6 +44,38 @@ This document defines the core categories for HeyPoco interactions. Each categor
 *   **Examples:** Moving to a new city, starting a new role, big life decisions, health breakthroughs.
 *   **Rich UI Components:** `MilestoneCard`, `HighImpactUpdate`, `DecisionLog`.
 
+## 11. Intelligence & Recall States
+*   **Examples:** AI confusion over a query, partial memory retrieval, direct answer unavailable, ambiguous references.
+*   **Rich UI Components:** `HazyMemoryCard` (Confused/No Results), `FragmentedRecallCard` (Partial Knowledge Fallback), `AmbiguityResolver`.
+
+## 12. Pet Care & Life
+*   **Examples:** Feeding times, medication schedules, vet appointment highlights, cute behavior logs.
+*   **Rich UI Components:** `PetCareCard`, `HealthLog`, `MilestoneTracker`.
+
+## 13. Media Curation & Recommendations
+*   **Examples:** Movie suggestions from friends, books to read, podcast highlights, shared Spotify playlists.
+*   **Rich UI Components:** `MediaCurationCard`, `LinkPreview`, `ReviewSnippet`.
+
+## 14. Vehicle Maintenance & Logistics
+*   **Examples:** Oil change reminders, insurance renewal, tire pressure logs, trip mileage.
+*   **Rich UI Components:** `VehicleLogCard`, `MaintenanceAlert`, `TripSummary`.
+
+## 15. Academic Success (College Life)
+*   **Examples:** GPA tracking, assignment deadlines, lecture highlights, study group coordination.
+*   **Rich UI Components:** `AcademicCard`, `GradeTracker`, `StudyTimer`.
+
+## 16. Professional Syncs & Networking
+*   **Examples:** Meeting transcript summaries, action items, new LinkedIn connections, project milestones.
+*   **Rich UI Components:** `MeetingBriefCard`, `ActionItemList`, `ContactCard`.
+
+## 17. Knowledge & Resource Vault
+*   **Examples:** Shared Google Docs, saved research links, PDF library, collaboration permissions.
+*   **Rich UI Components:** `SharedVaultCard`, `LinkPreviewGrid`, `DocAccessLog`.
+
+## 18. Daily Triage & Quick Capture
+*   **Examples:** Unsorted voice notes, quick text blurbs, "basic" daily mood check-ins, thing to-be-categorized.
+*   **Rich UI Components:** `InboxSweepCard`, `QuickCaptureSticky`, `MoodSparkline`.
+
 ---
 
 ### UI Implementation Strategy

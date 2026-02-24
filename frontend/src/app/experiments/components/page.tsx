@@ -22,7 +22,17 @@ import {
     Home,
     RotateCcw,
     CheckCircle2,
-    ListTodo
+    ListTodo,
+    HelpCircle,
+    Layers,
+    Dog,
+    Tv,
+    Car,
+    Activity,
+    GraduationCap,
+    Video,
+    Folder,
+    Inbox
 } from "lucide-react";
 
 /* ─── Shared Types ────────────────────────────────────────────────────────── */
@@ -420,6 +430,367 @@ function TaskCard() {
     );
 }
 
+/* ─── 12. Hazy Memory (AI State) ────────────────────────────────────────── */
+
+function HazyMemoryCard() {
+    return (
+        <CardShell
+            title="Hazy Memory"
+            description="I couldn't recall the exact details, but I sense something related to your trip in June."
+            category="AI State"
+            color="#9ca3af"
+            icon={<HelpCircle size={18} />}
+        >
+            <div className="mt-2 relative h-32 rounded-2xl bg-[#faf9f6] border border-[#e5e5e5] overflow-hidden flex items-center justify-center group/hazy">
+                <motion.div
+                    animate={{
+                        scale: [1, 1.1, 1],
+                        opacity: [0.3, 0.5, 0.3]
+                    }}
+                    transition={{
+                        duration: 4,
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                    }}
+                    className="absolute inset-0 bg-gradient-to-br from-[#9ca3af]/20 via-transparent to-[#9ca3af]/10"
+                />
+                <div className="z-10 flex flex-col items-center gap-2">
+                    <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-sm">
+                        <motion.div
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
+                        >
+                            <Sparkles size={20} className="text-[#9ca3af]" />
+                        </motion.div>
+                    </div>
+                    <span className="text-[10px] font-bold text-[#1a1a1a]/40 uppercase tracking-widest">Scanning Latent Space...</span>
+                </div>
+            </div>
+        </CardShell>
+    );
+}
+
+/* ─── 13. Fragmented Recall (AI State) ────────────────────────────────────── */
+
+function FragmentedRecallCard() {
+    return (
+        <CardShell
+            title="Fragmented Recall"
+            description="I found a few pieces that might be what you're looking for."
+            category="AI State"
+            color="#6366f1"
+            icon={<Layers size={18} />}
+        >
+            <div className="mt-2 space-y-2">
+                {[
+                    { text: "Mention of 'Black Sand Beach'", confidence: 65 },
+                    { text: "Photo metadata from Vik, Iceland", confidence: 40 }
+                ].map((fragment, i) => (
+                    <div key={i} className="group/frag p-3 rounded-xl border border-[#e5e5e5]/50 bg-white hover:border-[#6366f1]/30 transition-all">
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-[13px] text-[#1a1a1a] font-medium">{fragment.text}</span>
+                            <div className="flex gap-0.5">
+                                {[1, 2, 3].map(dot => (
+                                    <div
+                                        key={dot}
+                                        className={`w-1 h-1 rounded-full ${dot * 33 <= fragment.confidence ? 'bg-[#6366f1]' : 'bg-[#e5e5e5]'}`}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                        <div className="h-1 w-full bg-[#faf9f6] rounded-full overflow-hidden">
+                            <div
+                                className="h-full bg-[#6366f1] opacity-20"
+                                style={{ width: `${fragment.confidence}%` }}
+                            />
+                        </div>
+                    </div>
+                ))}
+                <button className="w-full py-2.5 rounded-xl border border-dashed border-[#e5e5e5] text-[11px] font-bold text-[#1a1a1a]/40 uppercase tracking-widest hover:border-[#1a1a1a]/20 hover:text-[#1a1a1a]/60 transition-all">
+                    Show 2 more fragments
+                </button>
+            </div>
+        </CardShell>
+    );
+}
+
+/* ─── 14. Pet Care (Lifestyle) ────────────────────────────────────────────── */
+
+function PetCareCard() {
+    return (
+        <CardShell
+            title="Luna's Schedule"
+            description="Dachshund · 3 years old · High Energy"
+            category="Pet Care"
+            color="#f97316"
+            icon={<Dog size={18} />}
+        >
+            <div className="mt-2 space-y-3">
+                <div className="flex items-center justify-between p-3 rounded-2xl bg-[#f97316]/5 border border-[#f97316]/10">
+                    <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-[#f97316] animate-pulse" />
+                        <span className="text-[13px] font-medium text-[#1a1a1a]">Morning Kibble</span>
+                    </div>
+                    <span className="text-[10px] font-bold text-[#f97316] uppercase">8:00 AM</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                    <div className="p-3 rounded-xl border border-[#e5e5e5]/50 flex flex-col gap-1">
+                        <span className="text-[10px] font-bold text-[#737373]/50 uppercase">Last Walk</span>
+                        <span className="text-xs font-medium">45m ago</span>
+                    </div>
+                    <div className="p-3 rounded-xl border border-[#e5e5e5]/50 flex flex-col gap-1">
+                        <span className="text-[10px] font-bold text-[#737373]/50 uppercase">Next Vet</span>
+                        <span className="text-xs font-medium">Oct 12</span>
+                    </div>
+                </div>
+            </div>
+        </CardShell>
+    );
+}
+
+/* ─── 15. Media Curation (Lifestyle) ────────────────────────────────────────── */
+
+function MediaCurationCard() {
+    return (
+        <CardShell
+            title="Recommended for You"
+            description="Based on your recent interest in 'Minimalism'"
+            category="Media"
+            color="#0ea5e9"
+            icon={<Tv size={18} />}
+        >
+            <div className="mt-2 space-y-3">
+                <div className="group/item flex gap-3 p-2 rounded-2xl hover:bg-[#faf9f6] transition-colors cursor-pointer border border-transparent hover:border-[#e5e5e5]">
+                    <div className="w-12 h-16 rounded-lg bg-[#e5e5e5] shrink-0 overflow-hidden relative">
+                        <div className="absolute inset-0 bg-gradient-to-br from-[#0ea5e9]/20 to-transparent" />
+                    </div>
+                    <div className="flex flex-col justify-center gap-0.5">
+                        <span className="text-[13px] font-medium text-[#1a1a1a]">The Creative Act</span>
+                        <span className="text-[11px] text-[#737373]">Rick Rubin · Book</span>
+                        <div className="flex gap-1 mt-1">
+                            {[1, 2, 3].map(i => <div key={i} className="w-3 h-1 rounded-full bg-[#0ea5e9]/20" />)}
+                        </div>
+                    </div>
+                </div>
+                <div className="p-3 rounded-2xl bg-[#0ea5e9]/5 border border-[#0ea5e9]/10 text-[11px] text-[#0ea5e9] font-medium italic">
+                    "Sarah mentioned this on Tuesday's call."
+                </div>
+            </div>
+        </CardShell>
+    );
+}
+
+/* ─── 16. Vehicle Log (Logistics) ───────────────────────────────────────────── */
+
+function VehicleLogCard() {
+    return (
+        <CardShell
+            title="Porsche 911"
+            description="2024 Carrera S · 12,430 mi"
+            category="Vehicle"
+            color="#ef4444"
+            icon={<Car size={18} />}
+        >
+            <div className="mt-2 space-y-3">
+                <div className="relative h-2 w-full bg-[#faf9f6] rounded-full overflow-hidden border border-[#e5e5e5]">
+                    <div className="absolute top-0 left-0 h-full bg-[#ef4444]" style={{ width: '85%' }} />
+                </div>
+                <div className="flex justify-between items-center text-[11px] font-bold text-[#1a1a1a]/40 uppercase tracking-widest">
+                    <span>Maintenance Status</span>
+                    <span className="text-[#ef4444]">Oil Soon</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                    <div className="p-3 rounded-xl border border-[#e5e5e5]/50 flex flex-col gap-1 items-center">
+                        <span className="text-[18px] font-medium text-[#1a1a1a]">32</span>
+                        <span className="text-[9px] font-bold text-[#737373]/50 uppercase">PSI Front</span>
+                    </div>
+                    <div className="p-3 rounded-xl border border-[#e5e5e5]/50 flex flex-col gap-1 items-center">
+                        <span className="text-[18px] font-medium text-[#1a1a1a]">35</span>
+                        <span className="text-[9px] font-bold text-[#737373]/50 uppercase">PSI Rear</span>
+                    </div>
+                </div>
+            </div>
+        </CardShell>
+    );
+}
+
+/* ─── 17. Biometric Trend (Health) ─────────────────────────────────────────── */
+
+function BiometricTrendCard() {
+    return (
+        <CardShell
+            title="Resting Heart Rate"
+            description="Last 7 days · Trending Down"
+            category="Biometrics"
+            color="#22c55e"
+            icon={<Activity size={18} />}
+        >
+            <div className="mt-2 flex items-end gap-1 h-24 pt-4">
+                {[45, 52, 48, 60, 55, 42, 40].map((val, i) => (
+                    <motion.div
+                        key={i}
+                        initial={{ height: 0 }}
+                        animate={{ height: `${val}%` }}
+                        className="flex-1 bg-[#22c55e]/20 rounded-t-sm relative group/bar"
+                    >
+                        <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-white border border-[#e5e5e5] px-1.5 py-0.5 rounded text-[9px] font-bold opacity-0 group-hover/bar:opacity-100 transition-opacity">
+                            {val + 20}
+                        </div>
+                    </motion.div>
+                ))}
+            </div>
+            <div className="mt-4 flex items-center justify-between">
+                <div className="flex flex-col">
+                    <span className="text-2xl font-medium">54</span>
+                    <span className="text-[10px] font-bold text-[#737373]/50 uppercase tracking-widest">Average BPM</span>
+                </div>
+                <div className="w-10 h-10 rounded-full border-2 border-[#22c55e]/20 flex items-center justify-center">
+                    <ArrowUpRight size={16} className="text-[#22c55e] rotate-90" />
+                </div>
+            </div>
+        </CardShell>
+    );
+}
+
+/* ─── 18. Academic Success (Academic) ─────────────────────────────────────── */
+
+function AcademicSuccessCard() {
+    return (
+        <CardShell
+            title="Computer Science"
+            description="Stanford University · Year 3 · Fall"
+            category="Academic"
+            color="#8b5cf6"
+            icon={<GraduationCap size={18} />}
+        >
+            <div className="mt-2 space-y-3">
+                <div className="flex justify-between items-end border-b border-[#e5e5e5]/30 pb-3">
+                    <div className="flex flex-col">
+                        <span className="text-2xl font-medium">3.92</span>
+                        <span className="text-[9px] font-bold text-[#8b5cf6] uppercase tracking-widest">Cumulative GPA</span>
+                    </div>
+                    <div className="text-right">
+                        <span className="text-sm font-medium">18 Credits</span>
+                        <span className="text-[9px] text-[#737373] block uppercase font-bold">In Progress</span>
+                    </div>
+                </div>
+                <div className="space-y-2">
+                    {[
+                        { name: "Distributed Systems", deadline: "Today" },
+                        { name: "AI Ethics Paper", deadline: "Friday" }
+                    ].map((item, i) => (
+                        <div key={i} className="flex items-center justify-between p-2.5 rounded-xl bg-[#faf9f6] border border-[#e5e5e5]/50">
+                            <span className="text-[13px] text-[#1a1a1a] font-medium">{item.name}</span>
+                            <span className="text-[10px] text-red-500 font-bold uppercase">{item.deadline}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </CardShell>
+    );
+}
+
+/* ─── 19. Professional Meeting (Career) ────────────────────────────────────── */
+
+function ProfessionalMeetingCard() {
+    return (
+        <CardShell
+            title="Q3 Strategy Sync"
+            description="Executive Board · 45m · Recorded"
+            category="Professional"
+            color="#ec4899"
+            icon={<Video size={18} />}
+        >
+            <div className="mt-2 space-y-3">
+                <div className="p-3 rounded-2xl bg-[#ec4899]/5 border border-[#ec4899]/10 relative overflow-hidden group/meeting">
+                    <div className="absolute top-0 right-0 p-2">
+                        <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                    </div>
+                    <span className="text-[10px] font-bold text-[#ec4899] uppercase block mb-1">Key Insight</span>
+                    <p className="text-[13px] text-[#1a1a1a] font-medium italic">"Shift focus to LatAm markets by October."</p>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                    {[
+                        "Allocate $2M for pilot",
+                        "Brief regional lead"
+                    ].map((item, i) => (
+                        <div key={i} className="flex items-center gap-2 px-1">
+                            <div className="w-1.5 h-1.5 rounded-full bg-[#ec4899]/30" />
+                            <span className="text-[12px] text-[#737373]">{item}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </CardShell>
+    );
+}
+
+/* ─── 20. Resource Vault (Documents) ───────────────────────────────────────── */
+
+function ResourceVaultCard() {
+    return (
+        <CardShell
+            title="Shared Resources"
+            description="7 Items · 2 Collaborators · Private"
+            category="Vault"
+            color="#475569"
+            icon={<Folder size={18} />}
+        >
+            <div className="mt-2 grid grid-cols-2 gap-2">
+                {[
+                    { name: "Pitch.pdf", type: "PDF" },
+                    { name: "Brand_Asset", type: "DIR" },
+                    { name: "Budget_V2", type: "XLS" },
+                    { name: "License.txt", type: "TXT" }
+                ].map((file, i) => (
+                    <div key={i} className="p-2.5 rounded-xl border border-[#e5e5e5]/50 bg-[#faf9f6]/50 flex items-center gap-2 group/file hover:bg-white transition-colors">
+                        <div className="w-6 h-6 rounded bg-[#475569]/10 flex items-center justify-center text-[#475569] text-[8px] font-bold">
+                            {file.type}
+                        </div>
+                        <span className="text-[11px] text-[#1a1a1a] truncate font-medium">{file.name}</span>
+                    </div>
+                ))}
+            </div>
+            <div className="mt-3 pt-3 border-t border-[#e5e5e5]/30 flex items-center justify-between">
+                <div className="flex -space-x-2">
+                    {[1, 2].map(i => <div key={i} className="w-6 h-6 rounded-full border-2 border-white bg-[#e5e5e5]" />)}
+                </div>
+                <span className="text-[10px] text-[#737373] font-bold">View History</span>
+            </div>
+        </CardShell>
+    );
+}
+
+/* ─── 21. Inbox Triage (Basics) ─────────────────────────────────────────────── */
+
+function InboxTriageCard() {
+    return (
+        <CardShell
+            title="Captured Today"
+            category="Triage"
+            color="#1a1a1a"
+            icon={<Inbox size={18} />}
+        >
+            <div className="mt-2 space-y-3">
+                <div className="p-4 rounded-2xl bg-[#faf9f6] border border-[#e5e5e5] relative group/triage">
+                    <div className="flex justify-between items-start mb-2">
+                        <span className="text-[10px] font-bold opacity-30 uppercase tracking-[0.2em]">Voice Capture</span>
+                        <div className="flex gap-0.5">
+                            {[1, 2, 3, 4].map(w => <div key={w} className="w-1 h-3 bg-[#1a1a1a]/20 rounded-full animate-bounce" style={{ animationDelay: `${w * 0.1}s` }} />)}
+                        </div>
+                    </div>
+                    <p className="text-[13px] text-[#1a1a1a] leading-relaxed">
+                        "Remember to check those vintage stores in Berlin when we move next March..."
+                    </p>
+                </div>
+                <button className="w-full py-3 rounded-2xl bg-[#1a1a1a] text-white text-[12px] font-bold flex items-center justify-center gap-2 hover:bg-black transition-all">
+                    Sweep to Journal <ChevronRight size={14} />
+                </button>
+            </div>
+        </CardShell>
+    );
+}
+
 /* ─── Main Page ───────────────────────────────────────────────────────────── */
 
 export default function ComponentsShowcase() {
@@ -432,7 +803,7 @@ export default function ComponentsShowcase() {
                     <div className="space-y-6">
                         <div className="flex items-center gap-3">
                             <div className="w-2.5 h-2.5 rounded-full bg-[#1a1a1a]" />
-                            <span className="text-xs font-bold tracking-[0.4em] uppercase opacity-40">Experiment v2</span>
+                            <span className="text-xs font-bold tracking-[0.4em] uppercase opacity-40">Experiment v3</span>
                         </div>
                         <h1 className="text-6xl md:text-8xl font-medium tracking-tight leading-[0.9]">
                             Visual <br /> Language.
@@ -470,6 +841,16 @@ export default function ComponentsShowcase() {
                     <HouseholdCard />
                     <SubscriptionCard />
                     <TaskCard />
+                    <HazyMemoryCard />
+                    <FragmentedRecallCard />
+                    <PetCareCard />
+                    <MediaCurationCard />
+                    <VehicleLogCard />
+                    <BiometricTrendCard />
+                    <AcademicSuccessCard />
+                    <ProfessionalMeetingCard />
+                    <ResourceVaultCard />
+                    <InboxTriageCard />
 
                     {/* Placeholder for more */}
                     <div className="border-2 border-dashed border-[#e5e5e5] rounded-[32px] flex flex-col items-center justify-center p-12 text-center space-y-4 group hover:border-[#1a1a1a]/20 transition-colors cursor-pointer">
