@@ -40,23 +40,36 @@ async def create_entry(
     raw_text: str,
     extracted_fields: Dict,
     tags: List[str],
-    attachments: Optional[List[str]] = None,
     embedding: Optional[List[float]] = None,
+    entry_date: Optional[str] = None,
+    source: str = "text",
+    is_sensitive: bool = False,
+    pii_types: Optional[List[str]] = None,
 ) -> Dict:
-    """Insert a new entry into the database."""
+    """Insert a new entry into the database.
+
+    Accepts both legacy fields and the new ingestion-pipeline fields
+    (entry_date, source, is_sensitive, pii_types) so this function
+    works for both the old POST /entries and the new ingest endpoint.
+    """
     client = await get_supabase_client()
 
     data = {
         "user_id": user_id,
-        "type": entry_type.value,
+        "type": entry_type.value if isinstance(entry_type, EntryType) else str(entry_type),
         "raw_text": raw_text,
         "extracted_fields": extracted_fields,
         "tags": tags,
-        "attachments": attachments or [],
+        "source": source,
+        "is_sensitive": is_sensitive,
+        "pii_types": pii_types or [],
     }
 
     if embedding:
         data["embedding"] = embedding
+
+    if entry_date:
+        data["entry_date"] = entry_date
 
     result = await client.table("entries").insert(data).execute()
 

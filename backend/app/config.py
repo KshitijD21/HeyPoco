@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 from functools import lru_cache
+from typing import Optional
 
 
 class Settings(BaseSettings):
@@ -21,7 +22,10 @@ class Settings(BaseSettings):
     openai_whisper_model: str = "whisper-1"
     openai_embedding_model: str = "text-embedding-3-small"
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    # Dev / testing
+    test_user_id: Optional[str] = None
+
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 
 @lru_cache

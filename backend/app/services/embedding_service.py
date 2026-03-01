@@ -28,8 +28,9 @@ Typical usage
     query_vector = await embed("how much did I spend on groceries?")
 """
 
-import os
 from openai import AsyncOpenAI, APIError, AuthenticationError
+
+from app.config import get_settings
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -89,13 +90,7 @@ def _get_client() -> AsyncOpenAI:
     """
     global _client
     if _client is None:
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            raise EmbeddingError(
-                "OPENAI_API_KEY environment variable is not set. "
-                "Add it to your .env file or shell environment."
-            )
-        _client = AsyncOpenAI(api_key=api_key)
+        _client = AsyncOpenAI(api_key=get_settings().openai_api_key)
     return _client
 
 

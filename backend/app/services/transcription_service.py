@@ -14,12 +14,13 @@ Exceptions
     TranscriptionError           – any Whisper / network / I/O failure
 """
 
-import os
 from pathlib import Path
 from typing import Union
 
 from fastapi import UploadFile
 from openai import AsyncOpenAI, APIError, AuthenticationError
+
+from app.config import get_settings
 
 # ---------------------------------------------------------------------------
 # Custom exceptions
@@ -68,12 +69,7 @@ def _get_client() -> AsyncOpenAI:
     """
     global _client
     if _client is None:
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            raise TranscriptionError(
-                "OPENAI_API_KEY environment variable is not set. "
-                "Add it to your .env file or shell environment."
-            )
+        api_key = get_settings().openai_api_key
         _client = AsyncOpenAI(api_key=api_key)
     return _client
 
@@ -135,7 +131,7 @@ async def transcribe(audio_file: Union[UploadFile, str, Path]) -> str:
     # ------------------------------------------------------------------
     # Path 1: FastAPI UploadFile (HTTP multipart upload)
     # ------------------------------------------------------------------
-    if isinstance(audio_file, UploadFile):
+    if not isinstance(audio_file, (str, Path)):
         filename = audio_file.filename or "audio"
         _validate_extension(filename)
 

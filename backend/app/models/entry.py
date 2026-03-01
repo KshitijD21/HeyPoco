@@ -9,27 +9,64 @@ from pydantic import BaseModel, Field
 
 
 class EntryType(str, Enum):
-    """Supported entry categories."""
+    """Supported entry categories — matches heypoco_architecture.md §5."""
 
     FINANCE = "finance"
-    LINK = "link"
-    CAREER = "career"
-    DOCUMENT = "document"
+    JOURNAL = "journal"
+    TASK = "task"
+    EVENT = "event"
+    NOTE = "note"
+    HEALTH = "health"
     GENERAL = "general"
 
 
-class ExtractedFields(BaseModel):
-    """Structured data extracted by GPT-4o from raw user input."""
+class EntrySource(str, Enum):
+    """How the entry was created."""
 
+    VOICE = "voice"
+    TEXT = "text"
+
+
+class ExtractedFields(BaseModel):
+    """Structured data extracted by GPT-4o from raw user input.
+
+    Uses a flexible dict internally — keys differ per entry type.
+    See heypoco_architecture.md §4 for the JSONB contract.
+    """
+
+    # ── Finance ──────────────────────────────────────────────────────
     amount: Optional[float] = None
-    currency: Optional[str] = "USD"
+    currency: Optional[str] = None
     merchant: Optional[str] = None
     category: Optional[str] = None
-    company: Optional[str] = None
-    role: Optional[str] = None
-    url: Optional[str] = None
-    filename: Optional[str] = None
-    due_date: Optional[str] = None
+    breakdown: Optional[List[Any]] = None
+
+    # ── Journal ──────────────────────────────────────────────────────
+    mood: Optional[str] = None
+    energy: Optional[str] = None
+    highlights: Optional[List[str]] = None
+
+    # ── Task ─────────────────────────────────────────────────────────
+    action: Optional[str] = None
+    deadline: Optional[str] = None
+    status: Optional[str] = None
+
+    # ── Event ────────────────────────────────────────────────────────
+    title: Optional[str] = None
+    scheduled_at: Optional[str] = None
+    location: Optional[str] = None
+    duration_minutes: Optional[int] = None
+    reminder: Optional[bool] = None
+
+    # ── Note / Health / Shared ───────────────────────────────────────
+    person: Optional[str] = None
+    people: Optional[List[str]] = None
+    topic: Optional[str] = None
+    project: Optional[str] = None
+    symptom: Optional[str] = None
+    medication: Optional[str] = None
+    severity: Optional[str] = None
+    time: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -44,6 +81,12 @@ class Entry(BaseModel):
     tags: List[str] = Field(default_factory=list)
     attachments: List[str] = Field(default_factory=list)
     embedding: Optional[List[float]] = None
+    # ── New fields (architecture spec §3.2) ──────────────────────────
+    entry_date: Optional[datetime] = None
+    source: EntrySource = EntrySource.TEXT
+    is_sensitive: bool = False
+    pii_types: List[str] = Field(default_factory=list)
+    # ─────────────────────────────────────────────────────────────────
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
