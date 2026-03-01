@@ -6,7 +6,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import entries, extract, query, transcribe
+from app.routers import entries, extract, ingest, query, transcribe
+from app.routers import dev as dev_router
 from app.schemas.entry import HealthResponse
 
 
@@ -45,7 +46,15 @@ app.add_middleware(
 app.include_router(transcribe.router)
 app.include_router(extract.router)
 app.include_router(entries.router)
+app.include_router(ingest.router)
 app.include_router(query.router)
+
+# Dev-only routes — only mounted when DEBUG=True.
+# Bypasses auth so we can test the pipeline without a JWT.
+# NEVER enable in production.
+if settings.debug:
+    app.include_router(dev_router.router)
+    print("⚠️  DEV ROUTES ACTIVE — POST /api/dev/ingest (no auth) — test user: kshitij")
 
 
 # ── Health Check ─────────────────────────────────────────────────────────────

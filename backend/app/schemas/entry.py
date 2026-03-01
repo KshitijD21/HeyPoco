@@ -6,7 +6,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
-from app.models.entry import EntryType, ExtractedFields
+from app.models.entry import EntrySource, EntryType, ExtractedFields
 
 
 # ── Request Schemas ──────────────────────────────────────────────────────────
@@ -83,6 +83,10 @@ class EntryResponse(BaseModel):
     extracted_fields: ExtractedFields
     tags: List[str]
     attachments: List[str]
+    entry_date: Optional[datetime] = None
+    source: Optional[str] = None
+    is_sensitive: bool = False
+    pii_types: List[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -105,3 +109,29 @@ class QueryResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str = "ok"
     version: str = "0.1.0"
+
+
+# ── Ingestion Schemas ────────────────────────────────────────────────────────
+
+
+class IngestEntryResponse(BaseModel):
+    """Response from the full voice/text ingestion pipeline.
+
+    Contains the saved entry plus pipeline metadata so the frontend
+    can show a rich confirmation card.
+    """
+
+    id: uuid.UUID
+    user_id: uuid.UUID
+    type: str
+    raw_text: str
+    extracted_fields: dict = Field(default_factory=dict)
+    tags: List[str] = Field(default_factory=list)
+    entry_date: Optional[str] = None
+    source: str = "text"
+    is_sensitive: bool = False
+    pii_types: List[str] = Field(default_factory=list)
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
