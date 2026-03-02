@@ -1,7 +1,7 @@
 # HeyPoco — Complete Architecture & Engineering Reference
 
-**Version:** 2.0  
-**Date:** February 2026  
+**Version:** 2.1  
+**Date:** March 2026  
 **Status:** Active — MVP Build
 
 ---
@@ -39,9 +39,20 @@ User dumps anything → System understands + stores → User retrieves anytime
 
 ---
 
-## 3. Database Schema
+## 3. Database Design Principles
 
-### 3.1 profiles
+- **Raw text is the source of truth** — `raw_text` is always stored exactly as spoken/typed, never modified after creation
+- **JSONB over columns** — extracted fields are flexible JSONB, not rigid columns. Unknown places like "Zigle's" and new field types don't require schema changes
+- **Embeddings enable semantic search** — OpenAI `text-embedding-3-small` (1536 dims) on `raw_text` at ingest time. This is what lets "coffee" queries surface "Starbucks" and "Zigle's" entries
+- **Soft typing** — `type` is a rough label (finance, event, etc.), not a hard constraint. The LLM reasons over embeddings at query time, not types
+- **RLS at the database layer** — user isolation enforced in Postgres, not just application code
+- **Never let extraction failure block storage** — store raw text first, extraction is a best-effort overlay
+
+---
+
+## 4. Database Schema
+
+### 4.1 profiles
 
 ```sql
 CREATE TABLE public.profiles (
@@ -79,7 +90,7 @@ CREATE TRIGGER on_auth_user_created
 
 ---
 
-### 3.2 entries — Core Table
+### 4.2 entries — Core Table
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS vector;
@@ -137,7 +148,7 @@ CREATE POLICY "users can only see own entries"
 
 ---
 
-### 3.3 weekly_summaries (Post-MVP)
+### 4.3 weekly_summaries (Post-MVP)
 
 ```sql
 CREATE TABLE public.weekly_summaries (
@@ -162,7 +173,7 @@ CREATE POLICY "users can only see own summaries"
 
 ---
 
-### 3.4 Indexes
+### 4.4 Indexes
 
 ```sql
 -- Dominant query: user + time
@@ -206,7 +217,7 @@ CREATE INDEX idx_entries_embedding
 
 ---
 
-### 3.5 match_entries() — Vector Search Function
+### 4.5 match_entries() — Vector Search Function
 
 ```sql
 CREATE OR REPLACE FUNCTION match_entries(
@@ -259,7 +270,7 @@ $$;
 
 ---
 
-## 4. extracted_fields JSONB Contract
+## 5. extracted_fields JSONB Contract
 
 Same column, different keys per type. No schema migration needed to add new domains.
 
@@ -329,7 +340,7 @@ Same column, different keys per type. No schema migration needed to add new doma
 
 ---
 
-## 5. Entry Type Examples
+## 6. Entry Type Examples
 
 | User Says | type | Key extracted_fields | Vector Finds It When |
 |---|---|---|---|
@@ -342,7 +353,7 @@ Same column, different keys per type. No schema migration needed to add new doma
 
 ---
 
-## 6. PII Detection
+## 7. PII Detection
 
 ### What is PII?
 Personally Identifiable Information — sensitive data that can identify or harm someone if exposed to external APIs.
@@ -453,7 +464,7 @@ detect_pii("Call me at +91 98765 43210, my PAN is ABCDE1234F")
 
 ---
 
-## 7. Row Level Security — Explained
+## 8. Row Level Security — Explained
 
 ### Without RLS
 ```
@@ -483,7 +494,7 @@ Think of it as: your application code is a security guard at the door. RLS is a 
 
 ---
 
-## 8. GPT-4o Extraction Prompt
+## 9. GPT-4o Extraction Prompt
 
 Called once per entry at ingest. Identifies type, category, and extracts structured fields.
 
@@ -535,7 +546,7 @@ Rules:
 
 ---
 
-## 9. Full Ingestion Flow
+## 10. Full Ingestion Flow
 
 ### Your side (ingestion)
 
@@ -597,7 +608,7 @@ At 10 logs/day per user, 100 users: ~$93/month in AI costs.
 
 ---
 
-## 10. Full Retrieval Flow
+## 11. Full Retrieval Flow
 
 ### Your friend's side (retrieval)
 
@@ -658,7 +669,7 @@ Return to user:
 
 ---
 
-## 11. Retrieval Scenarios
+## 12. Retrieval Scenarios
 
 ### Scenario A — Finance query with fallback
 
@@ -732,7 +743,7 @@ Fast. Cheap. Exact.
 
 ---
 
-## 12. Three Query States
+## 13. Three Query States
 
 Every query resolves to one of three states:
 
@@ -756,7 +767,7 @@ State 3 — Nothing at all
 
 ---
 
-## 13. Build Order
+## 14. Build Order
 
 ### Your side (ingestion)
 
@@ -792,7 +803,7 @@ BUILD:
 
 ---
 
-## 14. Migration Files
+## 15. Migration Files
 
 ```
 supabase/migrations/
@@ -806,7 +817,7 @@ supabase/migrations/
 
 ---
 
-## 15. What Is Never Built
+## 16. What Is Never Built
 
 | Feature | Decision |
 |---|---|
