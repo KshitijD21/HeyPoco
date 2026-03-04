@@ -172,18 +172,66 @@ async def search_entries_by_embedding(
     user_id: str,
     embedding: List[float],
     match_count: int = 10,
+    similarity_threshold: float = 0.6,
+    type_filter: Optional[str] = None,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
 ) -> List[Dict]:
     """Find the most relevant entries using vector similarity (cosine distance).
-    Requires the `match_entries` Postgres function defined in schema.sql."""
+    Requires the `match_entries` Postgres function defined in schema.sql.
+
+    Args:
+        similarity_threshold: Max cosine distance (0.0=identical, 2.0=opposite).
+                              Lower = stricter. 0.6 is a good default.
+        type_filter: Optional entry type to restrict results (e.g. 'finance').
+        date_from / date_to: Optional time window filter applied in SQL.
+    """
     client = await get_supabase_client()
 
-    result = await client.rpc(
-        "match_entries",
-        {
-            "query_embedding": embedding,
-            "match_user_id": user_id,
-            "match_count": match_count,
-        },
-    ).execute()
+    params: Dict = {
+        "query_embedding": embedding,
+        "match_user_id": user_id,
+        "match_count": match_count,
+        "similarity_threshold": similarity_threshold,
+    }
+    if type_filter:
+        params["type_filter"] = type_filter
+    if date_from:
+        params["date_from"] = date_from.isoformat()
+    if date_to:
+        params["date_to"] = date_to.isoformat()
 
+    result = await client.rpc("match_entries", params).execute()
+
+    return result.data or []
+
+
+async def search_entries_by_finance(
+    user_id: str,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+) -> List[Dict]:
+    """Fetch ALL entries that have an extracted amount for a given time window.
+
+    Used by the finance SQL path in query_service — vector search is wrong
+    for aggregation queries because it caps at match_count and misses entries.
+    This returns every expense row so the LLM can sum them accurately.
+    """
+    client = await get_supabase_client()
+
+    query = (
+        client.table("entries")
+        .select("id, type, raw_text, extracted_fields, tags, entry_date")
+        .eq("user_id", user_id)
+        .not_.is_("extracted_fields->>amount", "null")
+    )
+
+    if date_from:
+        query = query.gte("entry_date", date_from.isoformat())
+    if date_to:
+        query = query.lte("entry_date", date_to.isoformat())
+
+    query = query.order("entry_date", desc=True)
+
+    result = await query.execute()
     return result.data or []

@@ -77,18 +77,20 @@ class ExtractResponse(BaseModel):
 
 class EntryResponse(BaseModel):
     id: uuid.UUID
-    user_id: uuid.UUID
+    user_id: Optional[uuid.UUID] = None
     type: EntryType
     raw_text: str
     extracted_fields: ExtractedFields
     tags: List[str]
-    attachments: List[str]
+    attachments: List[str] = Field(default_factory=list)
     entry_date: Optional[datetime] = None
     source: Optional[str] = None
     is_sensitive: bool = False
     pii_types: List[str] = Field(default_factory=list)
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    # Vector search only
+    similarity: Optional[float] = None
 
     model_config = {"from_attributes": True}
 
