@@ -19,7 +19,9 @@
  *  - Recent entries table (latest 5 saves)
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Mic, Send, Pause, Sparkles, Loader2, CheckCircle2, XCircle, ChevronRight } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -60,21 +62,21 @@ const API_BASE =
 const TEST_TIMEZONE = "Asia/Kolkata";
 
 const INITIAL_STEPS: PipelineStep[] = [
-  { id: "transcribe", label: "Transcription",  sub: "Whisper → raw text",              state: "idle" },
-  { id: "pii",        label: "PII Detection",   sub: "Local regex — zero API calls",    state: "idle" },
-  { id: "extract",    label: "Extraction",      sub: "GPT-4o → type + fields + tags",   state: "idle" },
-  { id: "embed",      label: "Embedding",       sub: "text-embedding-3-small → 1536d",  state: "idle" },
-  { id: "insert",     label: "Database Insert", sub: "Supabase → entries table",        state: "idle" },
+  { id: "transcribe", label: "Transcription", sub: "Whisper → raw text", state: "idle" },
+  { id: "pii", label: "PII Detection", sub: "Local regex — zero API calls", state: "idle" },
+  { id: "extract", label: "Extraction", sub: "GPT-4o → type + fields + tags", state: "idle" },
+  { id: "embed", label: "Embedding", sub: "text-embedding-3-small → 1536d", state: "idle" },
+  { id: "insert", label: "Database Insert", sub: "Supabase → entries table", state: "idle" },
 ];
 
 // Type → accent colour class
 const TYPE_COLOURS: Record<string, string> = {
   finance: "bg-emerald-100 text-emerald-800",
   journal: "bg-blue-100 text-blue-800",
-  task:    "bg-amber-100 text-amber-800",
-  event:   "bg-purple-100 text-purple-800",
-  note:    "bg-slate-100 text-slate-700",
-  health:  "bg-red-100 text-red-800",
+  task: "bg-amber-100 text-amber-800",
+  event: "bg-purple-100 text-purple-800",
+  note: "bg-slate-100 text-slate-700",
+  health: "bg-red-100 text-red-800",
   general: "bg-zinc-100 text-zinc-700",
 };
 
@@ -82,19 +84,19 @@ const TYPE_COLOURS: Record<string, string> = {
 
 export default function TestPage() {
   // Recording state
-  const [recording, setRecording]       = useState(false);
-  const [processing, setProcessing]     = useState(false);
-  const [textInput, setTextInput]       = useState("");
-  const [steps, setSteps]               = useState<PipelineStep[]>(INITIAL_STEPS);
-  const [result, setResult]             = useState<PipelineResult | null>(null);
-  const [error, setError]               = useState<string | null>(null);
-  const [recSeconds, setRecSeconds]     = useState(0);
+  const [recording, setRecording] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [textInput, setTextInput] = useState("");
+  const [steps, setSteps] = useState<PipelineStep[]>(INITIAL_STEPS);
+  const [result, setResult] = useState<PipelineResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [recSeconds, setRecSeconds] = useState(0);
   const [recentEntries, setRecentEntries] = useState<SavedEntry[]>([]);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef        = useRef<Blob[]>([]);
-  const timerRef         = useRef<ReturnType<typeof setInterval> | null>(null);
-  const streamRef        = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   // ── Step helpers ──────────────────────────────────────────────────
 
@@ -166,7 +168,8 @@ export default function TestPage() {
       setStep("transcribe", { state: "running", detail: "Sending to Whisper…" });
       formData.append("audio_file", audioBlob, "recording.webm");
     } else if (text?.trim()) {
-      setStep("transcribe", { state: "running", detail: "Skipped — text mode" });
+      const displaySnippet = text.trim().length > 30 ? text.trim().slice(0, 30) + "..." : text.trim();
+      setStep("transcribe", { state: "running", detail: `Input: "${displaySnippet}"` });
       formData.append("raw_text", text.trim());
     } else {
       setError("Provide audio or text.");
@@ -178,10 +181,10 @@ export default function TestPage() {
 
     // Mark remaining steps as running sequentially — updates are visual only,
     // actual processing is one POST. We animate them in sequence after the call.
-    setTimeout(() => setStep("pii",     { state: "running", detail: "Scanning locally…" }),      300);
-    setTimeout(() => setStep("extract", { state: "running", detail: "Calling GPT-4o…"      }),   600);
-    setTimeout(() => setStep("embed",   { state: "running", detail: "Generating vectors…"   }),  900);
-    setTimeout(() => setStep("insert",  { state: "running", detail: "Writing to Supabase…"  }), 1200);
+    setTimeout(() => setStep("pii", { state: "running", detail: "Scanning locally…" }), 300);
+    setTimeout(() => setStep("extract", { state: "running", detail: "Calling GPT-4o…" }), 600);
+    setTimeout(() => setStep("embed", { state: "running", detail: "Generating vectors…" }), 900);
+    setTimeout(() => setStep("insert", { state: "running", detail: "Writing to Supabase…" }), 1200);
 
     try {
       const res = await fetch(`${API_BASE}/api/dev/ingest`, {
@@ -200,15 +203,21 @@ export default function TestPage() {
 
       // Mark all steps done with rough timing
       const transcribeT = audioBlob ? totalMs * 0.25 : 0;
-      setStep("transcribe", { state: audioBlob ? "done" : "skipped",
-                              detail: audioBlob ? `${(transcribeT / 1000).toFixed(2)}s` : "text input",
-                              elapsed: transcribeT });
-      setStep("pii",        { state: "done",    detail: entry.is_sensitive ? `PII found: ${entry.pii_types.join(", ")}` : "No PII",      elapsed: 0 });
-      setStep("extract",    { state: "done",    detail: `type=${entry.type}`,      elapsed: totalMs * 0.55 });
-      setStep("embed",      { state: entry.is_sensitive ? "skipped" : "done",
-                              detail: entry.is_sensitive ? "Skipped (sensitive)" : "1536 dims",
-                              elapsed: totalMs * 0.2 });
-      setStep("insert",     { state: "done",    detail: `id: ${entry.id.slice(0, 8)}…`, elapsed: totalMs * 0.05 });
+      const displaySnippet = entry.raw_text.length > 25 ? entry.raw_text.slice(0, 25) + "..." : entry.raw_text;
+
+      setStep("transcribe", {
+        state: "done",
+        detail: audioBlob ? `${(transcribeT / 1000).toFixed(2)}s` : `Text: "${displaySnippet}"`,
+        elapsed: transcribeT
+      });
+      setStep("pii", { state: "done", detail: entry.is_sensitive ? `PII found: ${entry.pii_types.join(", ")}` : "No PII", elapsed: 0 });
+      setStep("extract", { state: "done", detail: `type=${entry.type}`, elapsed: totalMs * 0.55 });
+      setStep("embed", {
+        state: entry.is_sensitive ? "skipped" : "done",
+        detail: entry.is_sensitive ? "Skipped (sensitive)" : "1536 dims",
+        elapsed: totalMs * 0.2
+      });
+      setStep("insert", { state: "done", detail: `id: ${entry.id.slice(0, 8)}…`, elapsed: totalMs * 0.05 });
 
       setResult({ entry, raw_text: entry.raw_text });
       setRecentEntries(prev => [entry, ...prev].slice(0, 5));
@@ -265,49 +274,113 @@ export default function TestPage() {
           </p>
 
           {/* Mic button */}
-          <button
-            onClick={handleMicClick}
-            disabled={processing}
-            className={[
-              "w-24 h-24 rounded-full flex items-center justify-center transition-all duration-200 text-3xl select-none",
-              recording
-                ? "bg-red-500 text-white scale-105 shadow-lg shadow-red-200 animate-pulse"
-                : processing
-                  ? "bg-black/10 text-black/30 cursor-not-allowed"
-                  : "bg-black text-white hover:bg-black/80 hover:scale-105 shadow-md"
-            ].join(" ")}
-          >
-            {recording ? "■" : processing ? "…" : "🎤"}
-          </button>
-
           {recording && (
-            <p className="text-sm text-red-500 font-mono animate-pulse">
-              ● REC {recSeconds}s — click to stop
-            </p>
+            <AnimatePresence>
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                className="flex flex-col items-center space-y-2 mb-2"
+              >
+                <div className="flex items-center gap-1 h-6">
+                  {[1, 2, 3, 4, 5, 4, 3, 2].map((i, index) => (
+                    <motion.div
+                      key={index}
+                      className="w-1 bg-[#ef4444] rounded-full"
+                      animate={{
+                        height: [4, 20, 4],
+                        opacity: [0.4, 1, 0.4],
+                      }}
+                      transition={{
+                        repeat: Infinity,
+                        duration: 0.8,
+                        delay: i * 0.1,
+                        ease: "easeInOut",
+                      }}
+                    />
+                  ))}
+                </div>
+                <p className="text-[10px] font-bold text-red-500 tracking-[0.2em] uppercase animate-pulse">
+                  REC {recSeconds}s — click to stop
+                </p>
+              </motion.div>
+            </AnimatePresence>
           )}
 
+          {/* Mic Button Area */}
+          <div className="relative">
+            {/* Pulse glow */}
+            <div
+              className={`absolute inset-0 rounded-full bg-[#2d2d2d]/10 blur-xl transition-all duration-1000 ${recording ? "scale-150 opacity-100 bg-red-500/10" : "scale-75 opacity-0"
+                }`}
+            />
+
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={handleMicClick}
+              disabled={processing}
+              className={`relative w-24 h-24 rounded-full flex items-center justify-center shadow-2xl transition-all duration-500 z-10 ${recording
+                ? "bg-[#ef4444] text-white scale-110"
+                : processing
+                  ? "bg-[#e5e5e5] text-[#737373] cursor-not-allowed"
+                  : "bg-[#1a1a1a] text-white hover:scale-105"
+                }`}
+            >
+              <AnimatePresence mode="wait">
+                {recording ? (
+                  <motion.div
+                    key="stop"
+                    initial={{ opacity: 0, rotate: -90 }}
+                    animate={{ opacity: 1, rotate: 0 }}
+                    exit={{ opacity: 0, rotate: 90 }}
+                  >
+                    <Pause size={32} fill="currentColor" />
+                  </motion.div>
+                ) : processing ? (
+                  <motion.div
+                    key="loading"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                  >
+                    <Loader2 size={32} className="animate-spin" />
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="mic"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                  >
+                    <Mic size={32} strokeWidth={1.5} />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.button>
+          </div>
+
           {/* Divider */}
-          <div className="flex items-center gap-3 w-full">
-            <div className="flex-1 h-px bg-black/8" />
-            <span className="text-xs text-black/30">or type</span>
-            <div className="flex-1 h-px bg-black/8" />
+          <div className="flex items-center gap-3 w-full max-w-sm">
+            <div className="flex-1 h-px bg-black/5" />
+            <span className="text-[10px] font-bold text-black/20 uppercase tracking-widest">or type</span>
+            <div className="flex-1 h-px bg-black/5" />
           </div>
 
           {/* Text input */}
-          <form onSubmit={handleTextSubmit} className="w-full flex gap-2">
+          <form onSubmit={handleTextSubmit} className="w-full max-w-xl relative group">
             <input
               value={textInput}
               onChange={e => setTextInput(e.target.value)}
-              placeholder='e.g. "Spent $60 at Starbucks this morning"'
+              placeholder='Try "Spent $60 at Starbucks"'
               disabled={processing || recording}
-              className="flex-1 text-sm border border-black/15 rounded-xl px-4 py-3 bg-[#f9f8f6] placeholder-black/25 focus:outline-none focus:ring-2 focus:ring-black/20 disabled:opacity-40"
+              className="w-full pl-6 pr-14 py-4 bg-[#f4f4f5]/50 border border-transparent rounded-2xl text-base font-light text-[#1a1a1a] focus:outline-none focus:bg-white focus:ring-1 focus:ring-[#2d2d2d]/20 focus:border-[#e5e5e5] transition-all placeholder:text-[#737373]/60 shadow-inner disabled:opacity-40"
             />
             <button
               type="submit"
               disabled={!textInput.trim() || processing || recording}
-              className="px-4 py-3 rounded-xl bg-black text-white text-sm font-medium hover:bg-black/80 disabled:opacity-30 transition-opacity"
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-[#737373] hover:text-[#2d2d2d] disabled:opacity-30 transition-colors"
             >
-              Send
+              <Send size={20} strokeWidth={2} />
             </button>
           </form>
 
@@ -320,40 +393,52 @@ export default function TestPage() {
         </section>
 
         {/* ── Pipeline Steps ────────────────────────────────────── */}
-        <section className="bg-white rounded-2xl border border-black/8 p-6 space-y-3">
-          <h2 className="text-xs font-bold tracking-[0.2em] uppercase text-black/40 mb-4">
-            Pipeline
-          </h2>
-          {steps.map((step, i) => (
-            <StepRow key={step.id} step={step} index={i} />
-          ))}
+        <section className="bg-white rounded-3xl border border-[#e5e5e5]/50 p-8 shadow-sm space-y-6">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-6 bg-[#1a1a1a] rounded-full" />
+            <h2 className="text-[11px] font-black tracking-[0.2em] uppercase text-black/40">
+              Pipeline Execution
+            </h2>
+          </div>
+          <div className="space-y-4">
+            {steps.map((step, i) => (
+              <StepRow key={step.id} step={step} index={i} />
+            ))}
+          </div>
         </section>
 
         {/* ── Result ────────────────────────────────────────────── */}
         {result && (
-          <section className="bg-white rounded-2xl border border-black/8 p-6 space-y-5">
-            <h2 className="text-xs font-bold tracking-[0.2em] uppercase text-black/40">
-              Saved Entry
-            </h2>
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white rounded-3xl border border-[#e5e5e5]/50 p-8 shadow-lg space-y-6"
+          >
+            <div className="flex items-center gap-2">
+              <Sparkles size={16} className="text-[#3b82f6]" />
+              <h2 className="text-[11px] font-black tracking-[0.2em] uppercase text-black/40">
+                Processed Result
+              </h2>
+            </div>
 
             <EntryCard entry={result.entry} />
-          </section>
+          </motion.section>
         )}
 
         {/* ── Recent Entries ────────────────────────────────────── */}
         {recentEntries.length > 0 && (
-          <section className="bg-white rounded-2xl border border-black/8 p-6">
-            <h2 className="text-xs font-bold tracking-[0.2em] uppercase text-black/40 mb-4">
+          <section className="bg-white rounded-3xl border border-[#e5e5e5]/50 p-8 shadow-sm">
+            <h2 className="text-[11px] font-black tracking-[0.2em] uppercase text-black/40 mb-6">
               Saved This Session
             </h2>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {recentEntries.map(e => (
-                <div key={e.id} className="flex items-center gap-3 text-sm py-2 border-b border-black/5 last:border-0">
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${TYPE_COLOURS[e.type] ?? TYPE_COLOURS.general}`}>
+                <div key={e.id} className="group flex items-center gap-4 py-3 px-4 rounded-2xl hover:bg-[#f9f8f6] transition-colors border border-transparent hover:border-black/5">
+                  <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${TYPE_COLOURS[e.type] ?? TYPE_COLOURS.general}`}>
                     {e.type}
                   </span>
-                  <span className="text-black/70 truncate flex-1">{e.raw_text}</span>
-                  <span className="text-black/30 font-mono text-[10px] shrink-0">{e.id.slice(0, 8)}…</span>
+                  <span className="text-sm text-black/70 truncate flex-1 font-light italic">"{e.raw_text}"</span>
+                  <ChevronRight size={14} className="text-black/10 group-hover:text-black/30 transition-colors" />
                 </div>
               ))}
             </div>
@@ -399,34 +484,42 @@ const QUICK_TESTS = [
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function StepRow({ step, index }: { step: PipelineStep; index: number }) {
-  const icons: Record<StepState, string> = {
-    idle:    "○",
-    running: "◌",
-    done:    "✓",
-    skipped: "–",
-    error:   "✗",
+  const icons: Record<StepState, React.ReactNode> = {
+    idle: <div className="w-2 h-2 rounded-full border border-black/20" />,
+    running: <Loader2 size={14} className="animate-spin text-blue-500" />,
+    done: <CheckCircle2 size={14} className="text-emerald-500" />,
+    skipped: <div className="w-2 h-0.5 bg-black/20" />,
+    error: <XCircle size={14} className="text-red-500" />,
   };
-  const colours: Record<StepState, string> = {
-    idle:    "text-black/20",
-    running: "text-blue-500 animate-spin",
-    done:    "text-green-600",
-    skipped: "text-black/30",
-    error:   "text-red-500",
+
+  const statusColors: Record<StepState, string> = {
+    idle: "opacity-20",
+    running: "opacity-100",
+    done: "opacity-100",
+    skipped: "opacity-40",
+    error: "opacity-100",
   };
 
   return (
-    <div className="flex items-center gap-3 py-1">
-      <span className={`text-sm w-4 text-center font-mono ${colours[step.state]}`}>
+    <div className={`flex items-center gap-4 px-4 py-3 rounded-2xl border transition-all duration-300 ${step.state === "running" ? "bg-blue-50/50 border-blue-100" :
+      step.state === "error" ? "bg-red-50/50 border-red-100" :
+        "border-transparent"
+      } ${statusColors[step.state]}`}>
+      <div className="w-6 flex justify-center">
         {icons[step.state]}
-      </span>
+      </div>
       <div className="flex-1">
-        <span className={`text-sm font-medium ${step.state === "idle" ? "text-black/30" : "text-black/80"}`}>
+        <p className="text-sm font-medium text-[#1a1a1a]">
           {step.label}
-        </span>
-        <span className="text-xs text-black/30 ml-2">{step.sub}</span>
+        </p>
+        <p className="text-[11px] text-[#737373]/60 font-light">
+          {step.sub}
+        </p>
       </div>
       {step.detail && (
-        <span className="text-xs font-mono text-black/40 shrink-0">{step.detail}</span>
+        <span className="text-[11px] font-mono bg-black/5 px-2 py-0.5 rounded-md text-black/50">
+          {step.detail}
+        </span>
       )}
     </div>
   );
@@ -436,44 +529,45 @@ function EntryCard({ entry }: { entry: SavedEntry }) {
   const typeClass = TYPE_COLOURS[entry.type] ?? TYPE_COLOURS.general;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Type + ID */}
       <div className="flex items-center gap-3">
-        <span className={`px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wide ${typeClass}`}>
+        <span className={`px-3 py-1 rounded-xl text-[11px] font-black uppercase tracking-widest bg-white border shadow-sm ${typeClass}`}>
           {entry.type}
         </span>
         {entry.is_sensitive && (
-          <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-red-100 text-red-700">
-            🔒 SENSITIVE — no embedding
+          <span className="px-3 py-1 rounded-xl text-[11px] font-black tracking-widest bg-red-50 text-red-600 border border-red-100 flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse" />
+            SENSITIVE
           </span>
         )}
-        <span className="text-xs font-mono text-black/30 ml-auto">{entry.id}</span>
+        <span className="text-[10px] font-mono text-black/20 ml-auto select-all">{entry.id}</span>
       </div>
 
       {/* Raw text */}
-      <div className="bg-[#f9f8f6] rounded-xl px-4 py-3 text-sm text-black/70 italic">
+      <div className="bg-[#f9f8f6] rounded-2xl px-6 py-5 text-base text-[#1a1a1a] font-light italic leading-relaxed shadow-inner border border-black/5">
         "{entry.raw_text}"
       </div>
 
       {/* Meta grid */}
-      <div className="grid grid-cols-2 gap-3 text-sm">
-        <MetaRow label="entry_date"   value={entry.entry_date ?? "—"} />
-        <MetaRow label="source"       value={entry.source} />
-        <MetaRow label="tags"         value={entry.tags.join(", ") || "—"} />
-        <MetaRow label="pii_types"    value={entry.pii_types.join(", ") || "none"} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <MetaRow label="entry_date" value={entry.entry_date ?? "—"} />
+        <MetaRow label="source" value={entry.source} />
+        <MetaRow label="tags" value={entry.tags.join(", ") || "—"} />
+        <MetaRow label="pii_types" value={entry.pii_types.join(", ") || "none"} />
       </div>
 
       {/* Extracted fields */}
       {Object.keys(entry.extracted_fields).length > 0 && (
-        <div>
-          <p className="text-xs font-bold text-black/30 uppercase tracking-widest mb-2">
-            extracted_fields
+        <div className="space-y-3">
+          <p className="text-[11px] font-black text-black/30 uppercase tracking-[0.2em]">
+            Extracted Intelligence
           </p>
-          <div className="bg-[#f9f8f6] rounded-xl px-4 py-3 font-mono text-xs text-black/60 space-y-1">
+          <div className="bg-[#1a1a1a] rounded-2xl p-6 font-mono text-[12px] text-white/80 space-y-2 shadow-xl">
             {Object.entries(entry.extracted_fields).map(([k, v]) => (
-              <div key={k} className="flex gap-2">
-                <span className="text-cyan-700">{k}:</span>
-                <span>{JSON.stringify(v)}</span>
+              <div key={k} className="flex gap-3 border-b border-white/5 pb-2 last:border-0 last:pb-0">
+                <span className="text-[#3b82f6] font-bold w-32 shrink-0">{k}:</span>
+                <span className="text-white/60">{JSON.stringify(v)}</span>
               </div>
             ))}
           </div>
@@ -485,9 +579,9 @@ function EntryCard({ entry }: { entry: SavedEntry }) {
 
 function MetaRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-[#f9f8f6] rounded-xl px-3 py-2">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-black/30">{label}</p>
-      <p className="text-sm text-black/70 mt-0.5 truncate">{value}</p>
+    <div className="bg-white border border-[#e5e5e5]/50 rounded-2xl px-5 py-3 shadow-sm">
+      <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#737373]/50 mb-1">{label}</p>
+      <p className="text-sm text-[#1a1a1a] font-medium truncate">{value}</p>
     </div>
   );
 }

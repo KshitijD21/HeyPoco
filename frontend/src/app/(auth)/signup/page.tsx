@@ -53,7 +53,7 @@ export default function SignupPage() {
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-            className="space-y-16"
+            className="space-y-12"
         >
             {/* Logo & Branding */}
             <div className="flex flex-col items-center space-y-6">
