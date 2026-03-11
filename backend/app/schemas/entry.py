@@ -47,6 +47,7 @@ class QueryRequest(BaseModel):
     """Natural language question against user's entries."""
 
     question: str = Field(..., min_length=1, max_length=1000)
+    user_timezone: str = Field(default="UTC", description="IANA timezone string")
 
 
 class EntryFilterParams(BaseModel):
@@ -102,10 +103,22 @@ class EntryListResponse(BaseModel):
     offset: int
 
 
+class PipelineStepResponse(BaseModel):
+    id: str
+    label: str
+    status: str  # "done" | "skipped"
+    detail: Optional[str] = None
+    duration_ms: Optional[int] = None
+
+
 class QueryResponse(BaseModel):
     answer: str
     sources: List[EntryResponse] = Field(default_factory=list)
     has_data: bool = True
+    fallback_triggered: bool = False
+    finance_total: Optional[float] = None
+    confidence: str = "low"
+    pipeline_steps: List[PipelineStepResponse] = Field(default_factory=list)
 
 
 class HealthResponse(BaseModel):

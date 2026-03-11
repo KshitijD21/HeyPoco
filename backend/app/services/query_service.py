@@ -1,160 +1,185 @@
-from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional
+"""
+query_service.py
+----------------
+Top-level orchestrator for the retrieval pipeline.
 
-from app.services.embedding_service import embed
-from app.services.openai_service import answer_query
-from app.services.supabase_service import search_entries_by_embedding, search_entries_by_finance
+Pipeline: classify → retrieve → synthesize (or return directly for list queries).
 
+This module wires together:
+    - query_classifier.py  (local keyword classification)
+    - retrieval_service.py (SQL + vector hybrid retrieval)
+    - synthesis_service.py (GPT-4o answer generation)
+"""
 
-# ── Query Classifier ─────────────────────────────────────────────────────────
+from __future__ import annotations
 
-_FINANCE_KEYWORDS = {
-    "spend", "spent", "cost", "costs", "paid", "pay", "expense", "expenses",
-    "money", "amount", "total", "much", "budget", "price", "bought", "buy",
-    "purchase", "charged", "bill", "invoice",
-}
+import logging
+import time
+from dataclasses import dataclass, field
+from typing import Optional
 
-_TIME_PATTERNS = {
-    "today":      0,
-    "yesterday":  1,
-    "this week":  7,
-    "last week":  14,
-    "this month": 30,
-    "last month": 60,
-    "this year":  365,
-}
+from app.services.query_classifier import classify_query
+from app.services.retrieval_service import retrieve
+from app.services.synthesis_service import synthesize
 
-
-def _classify_query(question: str) -> Dict:
-    """Local keyword classifier — no API call.
-
-    Returns:
-        {
-            "is_finance": bool,       # route to SQL finance path
-            "is_semantic": bool,      # route to vector search path
-            "time_range_days": int,   # how many days back to look
-            "similarity_threshold":   # cosine distance cutoff (lower = stricter)
-        }
-    """
-    q = question.lower()
-    words = set(q.split())
-
-    is_finance = bool(words & _FINANCE_KEYWORDS)
-
-    # Detect time range
-    time_range_days: Optional[int] = None
-    for phrase, days in _TIME_PATTERNS.items():
-        if phrase in q:
-            time_range_days = days
-            break
-
-    # Broad/vague queries need a relaxed threshold to cast a wider net.
-    # For general "what did I do" queries we also want broad matching.
-    # Cosine distance for real-world text is typically 0.4–0.8 so we
-    # use 0.85 as the default and 0.95 for explicitly broad queries.
-    broad_signals = {
-        "anything", "everything", "all", "summary", "overview",
-        "week", "month", "year", "today", "yesterday", "recent",
-        "show", "list", "what",
-    }
-    is_broad = bool(words & broad_signals)
-    similarity_threshold = 0.95 if is_broad else 0.85
-
-    # Finance queries should also do vector search for context
-    is_semantic = True  # always run vector; SQL is additive for finance
-
-    return {
-        "is_finance": is_finance,
-        "is_semantic": is_semantic,
-        "time_range_days": time_range_days,
-        "similarity_threshold": similarity_threshold,
-    }
+logger = logging.getLogger(__name__)
 
 
-def _build_time_window(time_range_days: Optional[int]):
-    """Convert a day-count into (date_from, date_to) UTC datetimes.
-
-    Now that entry_date is always stored as UTC in the extraction service,
-    we can use clean UTC arithmetic with no timezone padding hacks.
-
-    - ``today`` (0 days)  → UTC midnight today → UTC midnight tomorrow
-    - ``yesterday`` (1)   → UTC midnight yesterday → UTC midnight today
-    - ``this week`` (7)   → 7 days ago midnight → UTC midnight tomorrow
-    """
-    if time_range_days is None:
-        return None, None
-
-    now = datetime.now(timezone.utc)
-    # End of today (midnight tomorrow) to include the full current day
-    date_to = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-    # Start: go back N days from today's midnight
-    today_midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    date_from = today_midnight - timedelta(days=time_range_days)
-    return date_from, date_to
+# ── Output shape ────────────────────────────────────────────────────────────
 
 
-# ── Main Pipeline ────────────────────────────────────────────────────────────
+@dataclass
+class PipelineStep:
+    id: str
+    label: str
+    status: str  # "done" | "skipped"
+    detail: Optional[str] = None
+    duration_ms: Optional[int] = None
 
-async def query_entries(user_id: str, question: str) -> Dict:
-    """Hybrid RAG pipeline: classify → SQL and/or vector → merge → GPT-4o answer.
+
+@dataclass
+class QueryResponse:
+    answer: str
+    sources: list[dict] = field(default_factory=list)
+    has_data: bool = False
+    fallback_triggered: bool = False
+    finance_total: Optional[float] = None
+    confidence: str = "low"
+    pipeline_steps: list[PipelineStep] = field(default_factory=list)
+
+
+# ── Main pipeline ───────────────────────────────────────────────────────────
+
+
+async def query_entries(
+    user_id: str,
+    question: str,
+    user_timezone: str = "UTC",
+) -> QueryResponse:
+    """Full retrieval pipeline: classify → retrieve → synthesize.
+
+    Args:
+        user_id: UUID of the authenticated user.
+        question: Natural language question.
+        user_timezone: IANA timezone string (e.g. "Asia/Kolkata").
 
     Returns:
-        dict with keys: answer (str), sources (List[Dict]), has_data (bool)
+        QueryResponse with answer, sources, metadata.
     """
-    classification = _classify_query(question)
-    date_from, date_to = _build_time_window(classification["time_range_days"])
+    steps: list[PipelineStep] = []
 
-    sql_entries: List[Dict] = []
-    vector_entries: List[Dict] = []
+    # Step 1 — Classify
+    t0 = time.perf_counter()
+    classification = classify_query(question, user_timezone)
+    classify_ms = int((time.perf_counter() - t0) * 1000)
 
-    # PATH A — SQL: fetch ALL finance entries in the time window
-    # Vector search caps at match_count and misses entries — wrong for aggregation
-    if classification["is_finance"]:
-        sql_entries = await search_entries_by_finance(
-            user_id=user_id,
-            date_from=date_from,
-            date_to=date_to,
+    route_parts = []
+    if classification.is_finance:
+        route_parts.append("finance-sql")
+        if classification.merchant_filter:
+            route_parts.append(f"merchant={classification.merchant_filter}")
+    if classification.is_person:
+        route_parts.append(f"person={classification.person_name}")
+    if classification.is_list_query:
+        route_parts.append("list-query")
+    route_parts.append(f"time={classification.time_range_label}")
+    if classification.type_filter:
+        route_parts.append(f"type={classification.type_filter}")
+
+    steps.append(PipelineStep(
+        id="classify",
+        label="Query Classification",
+        status="done",
+        detail=", ".join(route_parts),
+        duration_ms=classify_ms,
+    ))
+
+    logger.info(
+        "Query classified: finance=%s, person=%s, list=%s, time=%s, type=%s, merchant=%s",
+        classification.is_finance,
+        classification.is_person,
+        classification.is_list_query,
+        classification.time_range_label,
+        classification.type_filter,
+        classification.merchant_filter,
+    )
+
+    # Step 2 — Retrieve
+    t0 = time.perf_counter()
+    retrieval = await retrieve(classification, question, user_id)
+    retrieve_ms = int((time.perf_counter() - t0) * 1000)
+
+    steps.append(PipelineStep(
+        id="retrieve",
+        label="Retrieval",
+        status="done",
+        detail=f"{len(retrieval.entries)} entries (sql={retrieval.sql_count}, vector={retrieval.vector_count})",
+        duration_ms=retrieve_ms,
+    ))
+
+    logger.info(
+        "Retrieved: %d entries (sql=%d, vector=%d, fallback=%s)",
+        len(retrieval.entries),
+        retrieval.sql_count,
+        retrieval.vector_count,
+        retrieval.fallback_triggered,
+    )
+
+    # Step 3 — List query: return directly without synthesis
+    if classification.is_list_query:
+        steps.append(PipelineStep(
+            id="synthesize",
+            label="Synthesis (GPT-4o)",
+            status="skipped",
+            detail="List query — no synthesis needed",
+        ))
+        return QueryResponse(
+            answer=f"Here are your {classification.type_filter or 'recent'} entries.",
+            sources=retrieval.entries,
+            has_data=len(retrieval.entries) > 0,
+            fallback_triggered=False,
+            finance_total=None,
+            confidence="high",
+            pipeline_steps=steps,
         )
 
-    # PATH B — Vector: semantic similarity search
-    if classification["is_semantic"]:
-        question_embedding = await embed(question)
-        vector_entries = await search_entries_by_embedding(
-            user_id=user_id,
-            embedding=question_embedding,
-            match_count=10,
-            similarity_threshold=classification["similarity_threshold"],
-            date_from=date_from,
-            date_to=date_to,
+    # Step 4 — Empty results: honest message, no GPT-4o call
+    if not retrieval.entries:
+        steps.append(PipelineStep(
+            id="synthesize",
+            label="Synthesis (GPT-4o)",
+            status="skipped",
+            detail="No entries found — skipped",
+        ))
+        return QueryResponse(
+            answer="Nothing in your logs matches that yet.",
+            sources=[],
+            has_data=False,
+            fallback_triggered=False,
+            finance_total=None,
+            confidence="low",
+            pipeline_steps=steps,
         )
 
-    # Merge: deduplicate by id, SQL entries take precedence (no similarity score needed)
-    seen_ids = set()
-    merged: List[Dict] = []
+    # Step 5 — Synthesize
+    t0 = time.perf_counter()
+    synthesis = await synthesize(question, retrieval, classification)
+    synth_ms = int((time.perf_counter() - t0) * 1000)
 
-    for entry in sql_entries:
-        entry_id = str(entry.get("id"))
-        if entry_id not in seen_ids:
-            seen_ids.add(entry_id)
-            merged.append(entry)
+    steps.append(PipelineStep(
+        id="synthesize",
+        label="Synthesis (GPT-4o)",
+        status="done",
+        detail=f"confidence={synthesis.confidence}",
+        duration_ms=synth_ms,
+    ))
 
-    for entry in vector_entries:
-        entry_id = str(entry.get("id"))
-        if entry_id not in seen_ids:
-            seen_ids.add(entry_id)
-            merged.append(entry)
-
-    if not merged:
-        return {
-            "answer": "I don't have enough logged data to answer that yet. Keep logging and ask me again!",
-            "sources": [],
-            "has_data": False,
-        }
-
-    answer = await answer_query(question, merged)
-
-    return {
-        "answer": answer,
-        "sources": merged,
-        "has_data": True,
-    }
+    return QueryResponse(
+        answer=synthesis.answer,
+        sources=retrieval.entries,
+        has_data=True,
+        fallback_triggered=retrieval.fallback_triggered,
+        finance_total=retrieval.finance_total,
+        confidence=synthesis.confidence,
+        pipeline_steps=steps,
+    )

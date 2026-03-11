@@ -32,7 +32,7 @@ from typing import Optional
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
 
 from app.config import get_settings
-from app.schemas.entry import IngestEntryResponse, QueryResponse, EntryResponse, EntryListResponse
+from app.schemas.entry import IngestEntryResponse, QueryResponse, EntryResponse, EntryListResponse, PipelineStepResponse
 from app.services.embedding_service import EmptyTextError, embed
 from app.services.extraction_service import ExtractionError, extract
 from app.services.pii_service import detect_pii
@@ -190,20 +190,34 @@ async def dev_ingest_entry(
 
 @router.post("/query", response_model=QueryResponse, summary="[DEV] Query entries — no auth")
 async def dev_query(body: dict) -> QueryResponse:
-    """Identical to POST /api/query but requires no JWT. Uses test user."""
+    """Identical to POST /api/query but requires no JWT. Uses test user with Asia/Kolkata timezone."""
     question = body.get("question", "")
     if not question.strip():
         raise HTTPException(status_code=400, detail="question is required")
 
     try:
-        result = await query_entries(_get_test_user_id(), question)
+        result = await query_entries(
+            user_id=_get_test_user_id(),
+            question=question,
+            user_timezone="Asia/Kolkata",
+        )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Query failed: {exc}")
 
     return QueryResponse(
-        answer=result["answer"],
-        sources=[EntryResponse(**s) for s in result["sources"]],
-        has_data=result["has_data"],
+        answer=result.answer,
+        sources=[EntryResponse(**s) for s in result.sources],
+        has_data=result.has_data,
+        fallback_triggered=result.fallback_triggered,
+        finance_total=result.finance_total,
+        confidence=result.confidence,
+        pipeline_steps=[
+            PipelineStepResponse(
+                id=s.id, label=s.label, status=s.status,
+                detail=s.detail, duration_ms=s.duration_ms,
+            )
+            for s in result.pipeline_steps
+        ],
     )
 
 
