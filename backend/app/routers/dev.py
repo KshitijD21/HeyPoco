@@ -29,14 +29,15 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
 
 from app.config import get_settings
-from app.schemas.entry import IngestEntryResponse
+from app.schemas.entry import IngestEntryResponse, QueryResponse, EntryResponse, EntryListResponse, PipelineStepResponse
 from app.services.embedding_service import EmptyTextError, embed
 from app.services.extraction_service import ExtractionError, extract
 from app.services.pii_service import detect_pii
-from app.services.supabase_service import create_entry
+from app.services.supabase_service import create_entry, get_entries
+from app.services.query_service import query_entries
 from app.services.transcription_service import (
     TranscriptionError,
     UnsupportedAudioFormatError,
@@ -180,3 +181,78 @@ async def dev_ingest_entry(
 
     logger.info("[DEV] Entry saved: id=%s, type=%s", saved.get("id"), entry_type)
     return IngestEntryResponse(**saved)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/dev/query  — RAG search, no auth
+# ---------------------------------------------------------------------------
+
+
+@router.post("/query", response_model=QueryResponse, summary="[DEV] Query entries — no auth")
+async def dev_query(body: dict) -> QueryResponse:
+    """Identical to POST /api/query but requires no JWT. Uses test user with Asia/Kolkata timezone."""
+    question = body.get("question", "")
+    if not question.strip():
+        raise HTTPException(status_code=400, detail="question is required")
+
+    try:
+        result = await query_entries(
+            user_id=_get_test_user_id(),
+            question=question,
+            user_timezone="Asia/Kolkata",
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Query failed: {exc}")
+
+    return QueryResponse(
+        answer=result.answer,
+        sources=[EntryResponse(**s) for s in result.sources],
+        has_data=result.has_data,
+        fallback_triggered=result.fallback_triggered,
+        finance_total=result.finance_total,
+        confidence=result.confidence,
+        pipeline_steps=[
+            PipelineStepResponse(
+                id=s.id, label=s.label, status=s.status,
+                detail=s.detail, duration_ms=s.duration_ms,
+            )
+            for s in result.pipeline_steps
+        ],
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /api/dev/entries  — list entries, no auth
+# ---------------------------------------------------------------------------
+
+
+@router.get("/entries", response_model=EntryListResponse, summary="[DEV] List entries — no auth")
+async def dev_list_entries(
+    type: Optional[str] = None,
+    tag: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    search: Optional[str] = None,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> EntryListResponse:
+    """Identical to GET /api/entries but requires no JWT. Uses test user."""
+    from app.utils.helpers import safe_parse_datetime
+
+    entries, total = await get_entries(
+        user_id=_get_test_user_id(),
+        entry_type=type,
+        tag=tag,
+        date_from=safe_parse_datetime(date_from),
+        date_to=safe_parse_datetime(date_to),
+        search=search,
+        limit=limit,
+        offset=offset,
+    )
+
+    return EntryListResponse(
+        entries=[EntryResponse(**e) for e in entries],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )

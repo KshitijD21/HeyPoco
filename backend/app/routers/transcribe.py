@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 
 from app.routers.auth import get_current_user_id
 from app.schemas.entry import TranscribeResponse
-from app.services.openai_service import transcribe_audio
+from app.services.transcription_service import transcribe as transcribe_audio_svc, TranscriptionError, UnsupportedAudioFormatError
 
 router = APIRouter(prefix="/api/transcribe", tags=["transcribe"])
 
@@ -50,11 +50,19 @@ async def transcribe(
             detail="Empty audio file",
         )
 
+    # Reset the cursor so the service can read the file again
+    await file.seek(0)
+
     try:
-        transcript = await transcribe_audio(audio_bytes, filename=file.filename or "audio.webm")
-    except Exception as e:
+        transcript = await transcribe_audio_svc(file)
+    except UnsupportedAudioFormatError as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except TranscriptionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Transcription failed: {str(e)}",
         )
 
