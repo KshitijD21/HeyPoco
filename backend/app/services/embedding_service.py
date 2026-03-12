@@ -73,7 +73,9 @@ class EmptyTextError(EmbeddingError):
 # Internal: lazy OpenAI client (module-level singleton, not a class)
 # ---------------------------------------------------------------------------
 
-_client: AsyncOpenAI | None = None
+from typing import Optional
+
+_client: Optional[AsyncOpenAI] = None
 
 
 def _get_client() -> AsyncOpenAI:

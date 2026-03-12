@@ -154,7 +154,7 @@ Rules:
 # Internal: lazy OpenAI client (same pattern as other services)
 # ---------------------------------------------------------------------------
 
-_client: AsyncOpenAI | None = None
+_client: Optional[AsyncOpenAI] = None
 
 
 def _get_client() -> AsyncOpenAI:

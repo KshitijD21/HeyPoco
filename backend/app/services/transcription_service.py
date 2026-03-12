@@ -56,7 +56,10 @@ _WHISPER_MODEL = "whisper-1"
 # Internal: lazy OpenAI client (module-level singleton, not a class)
 # ---------------------------------------------------------------------------
 
-_client: AsyncOpenAI | None = None
+from typing import Union, Optional
+from pathlib import Path
+
+_client: Optional[AsyncOpenAI] = None
 
 
 def _get_client() -> AsyncOpenAI:
