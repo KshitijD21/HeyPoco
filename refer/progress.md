@@ -2,6 +2,98 @@
 
 ---
 
+## March 10, 2026 — Retrieval Pipeline (Complete Rebuild)
+
+Full rewrite of the retrieval/query pipeline. The old `query_service.py` had fundamental bugs (wrong similarity thresholds, rolling day counts instead of calendar weeks, GPT-4o doing finance math, no person queries, no fallback states). Rebuilt from scratch following the architecture spec §11–§13.
+
+### `backend/app/services/query_classifier.py` — **NEW**
+- `classify_query(question, user_timezone)` → `QueryClassification`
+- Local keyword detection only — zero API calls, < 1ms
+- Finance detection: keyword set + phrase matching ("how much", "what did I spend")
+- Person detection: regex patterns + capitalisation heuristics, extracts `person_name`
+- List query detection: "show me", "list", "all my" + type words → skip GPT-4o synthesis
+- Type filter detection: maps keywords to entry types (journal, task, event, health, note, finance)
+- Calendar-aware time windows in user's timezone → converted to UTC
+  - "this week" = Monday midnight local → tomorrow midnight local (not 7 days rolling)
+  - "last week" = previous Monday → this Monday
+  - "this month" = 1st of month → tomorrow
+- Similarity threshold: 0.5 for specific queries, 0.6 for broad
+
+### `backend/app/services/retrieval_service.py` — **NEW**
+- `retrieve(classification, question, user_id)` → `RetrievalResult`
+- Four retrieval paths:
+  - **PATH A** — Finance SQL: fetches ALL entries with `amount` in time window, computes `finance_total` in Python
+  - **PATH B** — Vector search: `match_entries()` RPC with proper thresholds (0.5/0.6, not 0.85/0.95)
+  - **PATH C** — Person SQL: queries `extracted_fields->>'person'` + `raw_text ILIKE` for person name
+  - **PATH D** — Type+Date SQL: direct list queries, no vector search, no GPT-4o
+- Smart path routing: list→D only, finance→A+B, person→C+B, else→B only
+- Merge + deduplication by entry ID, SQL entries annotated with similarity from vector
+- Finance fallback: if vector finds nothing, show all spending with honest explanation
+- Semantic fallback: if vector returns nothing and time window exists, fall back to type+date SQL
+
+### `backend/app/services/synthesis_service.py` — **NEW**
+- `synthesize(question, retrieval, classification)` → `SynthesisResult`
+- Single GPT-4o call with structured context (entry type, date, similarity confidence tags)
+- Pre-computed `finance_total` passed as fact — GPT-4o uses it, does not recompute
+- Fallback acknowledgement: "I couldn't find X specifically, but here's what I found"
+- Confidence scoring based on similarity averages + fallback state
+- List queries skip GPT-4o entirely (handled upstream)
+
+### `backend/app/services/query_service.py` — **REWRITTEN**
+- `query_entries(user_id, question, user_timezone)` → `QueryResponse`
+- Wires classifier → retrieval → synthesis into a clean pipeline
+- Accepts `user_timezone` parameter (was missing before)
+- Returns enriched response: `answer`, `sources`, `has_data`, `fallback_triggered`, `finance_total`, `confidence`
+- Empty results return honest message without GPT-4o call
+
+### `backend/app/routers/query.py` — **REWRITTEN**
+- `POST /api/query` now accepts `user_timezone` in request body
+- Passes timezone through to `query_entries()`
+- Returns full `QueryResponse` with fallback/confidence/finance_total fields
+
+### `backend/app/routers/dev.py` — **UPDATED**
+- `POST /api/dev/query` now passes `user_timezone="Asia/Kolkata"` for test user
+- Updated to use new `QueryResponse` dataclass attributes (`.answer` not `["answer"]`)
+
+### `backend/app/schemas/entry.py` — **UPDATED**
+- `QueryRequest`: added `user_timezone` field (default "UTC")
+- `QueryResponse`: added `fallback_triggered`, `finance_total`, `confidence` fields
+
+### Bugs Fixed (from old implementation)
+1. Similarity threshold 0.85/0.95 → 0.5/0.6 (cosine distance, lower is better)
+2. "last week" = 14 days rolling → calendar Monday-to-Sunday in user's timezone
+3. GPT-4o summing finance totals → pre-computed in Python
+4. No person query path → SQL + vector hybrid for person names
+5. No fallback state → honest fallback with broader data
+6. GPT-4o on list queries → return entries directly
+7. User timezone not flowing through → timezone passed from API → classifier → time windows
+
+### `frontend/src/app/test/query/page.tsx` — **NEW**
+- Standalone retrieval test page at `/test/query` (no auth, calls `/api/dev/query`)
+- Text input with real-time query submission
+- Answer display with confidence badge, fallback indicator, finance total
+- Source entries displayed with similarity scores (strong/related/weak)
+- Extracted fields and tags shown per source entry
+- Quick test query buttons for all scenario types (finance, journal, person, list, task, health, fallback, semantic, empty)
+- Query history table (last 10 queries, clickable to re-run)
+- Link between ingestion (`/test`) and retrieval (`/test/query`) test pages
+
+### `frontend/src/app/test/page.tsx` — **UPDATED**
+- Added navigation link to retrieval test page in header
+
+### `supabase/seed_retrieval_test.sql` — **NEW**
+- 15 test entries covering all 7 entry types (5 finance, 2 journal, 2 task, 1 event, 2 note, 1 health, 1 PII)
+- SQL-only — no embeddings (vector search won't work, SQL paths will)
+- Idempotent: clears previous test entries before inserting
+
+### `scripts/seed_retrieval.sh` — **NEW**
+- Shell script that ingests 14 entries through `/api/dev/ingest`
+- Each entry goes through the full pipeline (PII → extract → embed → insert)
+- Entries get real embeddings — both SQL and vector search will work
+- Requires backend running with `DEBUG=true`
+
+---
+
 ## February 28, 2026 — Ingestion Pipeline
 
 ### `backend/app/services/pii_service.py` — **NEW**

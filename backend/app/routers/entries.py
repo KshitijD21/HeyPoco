@@ -10,7 +10,7 @@ from app.schemas.entry import (
     EntryResponse,
     UpdateEntryRequest,
 )
-from app.services.openai_service import generate_embedding
+from app.services.embedding_service import embed
 from app.services.supabase_service import (
     create_entry,
     delete_entry,
@@ -63,7 +63,7 @@ async def create_new_entry(
 ) -> EntryResponse:
     """Create a new entry with optional embedding generation."""
 
-    embedding = await generate_embedding(body.raw_text)
+    embedding = await embed(body.raw_text)
 
     entry = await create_entry(
         user_id=user_id,

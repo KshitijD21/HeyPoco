@@ -47,6 +47,7 @@ class QueryRequest(BaseModel):
     """Natural language question against user's entries."""
 
     question: str = Field(..., min_length=1, max_length=1000)
+    user_timezone: str = Field(default="UTC", description="IANA timezone string")
 
 
 class EntryFilterParams(BaseModel):
@@ -77,18 +78,20 @@ class ExtractResponse(BaseModel):
 
 class EntryResponse(BaseModel):
     id: uuid.UUID
-    user_id: uuid.UUID
+    user_id: Optional[uuid.UUID] = None
     type: EntryType
     raw_text: str
     extracted_fields: ExtractedFields
     tags: List[str]
-    attachments: List[str]
+    attachments: List[str] = Field(default_factory=list)
     entry_date: Optional[datetime] = None
     source: Optional[str] = None
     is_sensitive: bool = False
     pii_types: List[str] = Field(default_factory=list)
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    # Vector search only
+    similarity: Optional[float] = None
 
     model_config = {"from_attributes": True}
 
@@ -100,10 +103,22 @@ class EntryListResponse(BaseModel):
     offset: int
 
 
+class PipelineStepResponse(BaseModel):
+    id: str
+    label: str
+    status: str  # "done" | "skipped"
+    detail: Optional[str] = None
+    duration_ms: Optional[int] = None
+
+
 class QueryResponse(BaseModel):
     answer: str
     sources: List[EntryResponse] = Field(default_factory=list)
     has_data: bool = True
+    fallback_triggered: bool = False
+    finance_total: Optional[float] = None
+    confidence: str = "low"
+    pipeline_steps: List[PipelineStepResponse] = Field(default_factory=list)
 
 
 class HealthResponse(BaseModel):

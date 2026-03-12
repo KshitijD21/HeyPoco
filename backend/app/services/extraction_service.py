@@ -189,21 +189,46 @@ def _validate_type(raw_type: Any) -> str:
     return normalised if normalised in _VALID_TYPES else "general"
 
 
-def _validate_entry_date(raw_date: Any, fallback: str) -> str:
+def _validate_entry_date(raw_date: Any, fallback: str, timezone_str: str = "UTC") -> str:
     """
-    Return a valid ISO-8601 datetime string.
+    Return a valid ISO-8601 datetime string normalised to **UTC**.
+
+    GPT-4o typically returns a bare datetime like ``"2026-03-02T00:00:00"``
+    without timezone info.  We treat it as local time in *timezone_str*
+    (the user's timezone), convert to UTC, and return an explicit UTC
+    ISO string.  This ensures ``entry_date`` is always stored as UTC in
+    the TIMESTAMPTZ column, making date-range queries straightforward.
 
     If GPT-4o returned something unparseable, fall back to *fallback*
-    (which is the current_date the caller provided).
+    (which is the current_date the caller provided) at midnight UTC.
     """
+    from zoneinfo import ZoneInfo
+
+    user_tz = ZoneInfo(timezone_str) if timezone_str else ZoneInfo("UTC")
+    utc_tz = ZoneInfo("UTC")
+
+    def _to_utc(dt_str: str) -> str:
+        """Parse a datetime string, localise to user TZ if naive, convert to UTC."""
+        dt = datetime.fromisoformat(dt_str.strip())
+        if dt.tzinfo is None:
+            # Bare datetime → treat as user's local time
+            dt = dt.replace(tzinfo=user_tz)
+        return dt.astimezone(utc_tz).isoformat()
+
     if not isinstance(raw_date, str) or not raw_date.strip():
-        return fallback
-    # Quick parse check — if it blows up, use the fallback.
+        # Fallback — current_date is typically "2026-03-02" (date only)
+        try:
+            return _to_utc(fallback)
+        except (ValueError, TypeError):
+            return datetime.now(utc_tz).isoformat()
+
     try:
-        datetime.fromisoformat(raw_date.strip())
-        return raw_date.strip()
+        return _to_utc(raw_date)
     except (ValueError, TypeError):
-        return fallback
+        try:
+            return _to_utc(fallback)
+        except (ValueError, TypeError):
+            return datetime.now(utc_tz).isoformat()
 
 
 def _validate_tags(raw_tags: Any) -> List[str]:
@@ -316,7 +341,9 @@ async def extract(
     # Validate & normalise each field
     # ------------------------------------------------------------------
     entry_type = _validate_type(parsed.get("type"))
-    entry_date = _validate_entry_date(parsed.get("entry_date"), fallback=current_date)
+    entry_date = _validate_entry_date(
+        parsed.get("entry_date"), fallback=current_date, timezone_str=timezone,
+    )
     extracted_fields = _clean_extracted_fields(parsed.get("extracted_fields"))
     tags = _validate_tags(parsed.get("tags"))
 

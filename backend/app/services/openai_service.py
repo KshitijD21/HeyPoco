@@ -114,17 +114,37 @@ async def answer_query(question: str, context_entries: List[Dict]) -> str:
     client = get_openai_client()
     settings = get_settings()
 
-    context_text = "\n\n".join(
-        f"[{entry.get('type', 'general').upper()} — {entry.get('created_at', 'unknown date')}]\n"
-        f"Raw: {entry.get('raw_text', '')}\n"
-        f"Fields: {json.dumps(entry.get('extracted_fields', {}), default=str)}"
-        for entry in context_entries
-    )
+    def format_entry(entry: Dict) -> str:
+        # Prefer entry_date (returned by match_entries) over created_at
+        date_str = entry.get("entry_date") or entry.get("created_at") or "unknown date"
+        # Trim to date+time, drop microseconds
+        if "T" in str(date_str):
+            date_str = str(date_str)[:16]
+
+        # Strip null fields — don't waste tokens on {"currency": null, "role": null, ...}
+        raw_fields = entry.get("extracted_fields") or {}
+        clean_fields = {k: v for k, v in raw_fields.items() if v is not None and v != [] and v != {}}
+
+        # Format fields as readable key=value pairs
+        fields_str = ", ".join(f"{k}={v}" for k, v in clean_fields.items()) if clean_fields else "none"
+
+        # Include similarity so GPT-4o knows how confident to be
+        similarity = entry.get("similarity")
+        confidence = f" [similarity={similarity:.2f}]" if similarity is not None else ""
+
+        return (
+            f"[{entry.get('type', 'general').upper()} — {date_str}{confidence}]\n"
+            f"Logged: {entry.get('raw_text', '')}\n"
+            f"Fields: {fields_str}"
+        )
+
+    context_text = "\n\n".join(format_entry(e) for e in context_entries)
 
     system_prompt = (
-        "You are HeyPoco, a personal life assistant. The user is asking a question about their own logged data. "
-        "Answer using ONLY the provided context entries. Be concise, specific, and honest. "
-        "If the data doesn't contain enough information to answer, say so clearly — never fabricate information.\n\n"
+        "You are HeyPoco, a personal life assistant. The user is asking a question about their own logged data.\n"
+        "Answer using ONLY the provided context entries. Be concise, specific, and honest.\n"
+        "Similarity scores are cosine distances: < 0.3 = strong match, 0.3–0.6 = related, > 0.6 = weak.\n"
+        "If the data doesn't contain enough information to answer, say so clearly — never fabricate.\n\n"
         f"USER'S LOGGED ENTRIES:\n{context_text}"
     )
 

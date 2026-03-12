@@ -21,7 +21,8 @@
 
 import { useCallback, useRef, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mic, Send, Pause, Sparkles, Loader2, CheckCircle2, XCircle, ChevronRight } from "lucide-react";
+import { Mic, Send, Pause, Sparkles, Loader2, CheckCircle2, XCircle, ChevronRight, Search } from "lucide-react";
+import Link from "next/link";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -260,9 +261,18 @@ export default function TestPage() {
         <span className="ml-2 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 text-amber-700 border border-amber-200">
           DEV / TEST
         </span>
-        <span className="text-xs text-black/40 ml-auto">
-          User: <strong>kshitij</strong> · {TEST_TIMEZONE}
-        </span>
+        <div className="ml-auto flex items-center gap-4">
+          <Link
+            href="/test/query"
+            className="text-xs text-black/40 hover:text-black/70 transition-colors flex items-center gap-1"
+          >
+            <Search size={12} />
+            Retrieval Test
+          </Link>
+          <span className="text-xs text-black/40">
+            User: <strong>kshitij</strong> · {TEST_TIMEZONE}
+          </span>
+        </div>
       </header>
 
       <div className="max-w-3xl mx-auto px-4 py-10 space-y-8">
