@@ -16,7 +16,6 @@ import {
   Plane,
   LogOut,
 } from 'lucide-react'
-import { useRouter } from 'next/navigation'
 import { ingestEntry, queryEntries, transcribeAudio } from '@/lib/api-client'
 import { createClient } from '@/lib/supabase/client'
 import type { IngestResponse, QueryResponse } from '@/types'
@@ -677,7 +676,6 @@ function pickSeed(email: string): string {
 function ProfileAvatar() {
   const [open, setOpen] = useState(false)
   const [email, setEmail] = useState<string | null>(null)
-  const router = useRouter()
   const avatarRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -702,7 +700,8 @@ function ProfileAvatar() {
   const handleLogout = async () => {
     const supabase = createClient()
     await supabase.auth.signOut()
-    router.push('/login')
+    // Hard redirect so middleware re-evaluates with cleared cookies
+    window.location.href = '/login'
   }
 
   const avatarSrc = dicebearUrl(pickSeed(email ?? 'poco'))
@@ -764,21 +763,30 @@ const BAR_COUNT = 8
 /* ─── Component ──────────────────────────────────────────────────────────── */
 
 export default function ZenModePage() {
+  // ── All state ────────────────────────────────────────────────────────────
+  const [authed, setAuthed] = useState<boolean | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputText, setInputText] = useState('')
   const [processing, setProcessing] = useState(false)
   const [isListening, setIsListening] = useState(false)
-  // Live bar heights driven by mic volume (px, 4–24)
   const [barHeights, setBarHeights] = useState<number[]>(Array(BAR_COUNT).fill(4))
-  const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Recording refs — no state, avoids stale closure issues
+  // ── All refs ─────────────────────────────────────────────────────────────
+  const scrollRef = useRef<HTMLDivElement>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const rafRef = useRef<number | null>(null)
+
+  /* ── Auth guard ─────────────────────────────────────────────────────── */
+  useEffect(() => {
+    createClient().auth.getUser().then(({ data }) => {
+      if (!data.user) window.location.href = '/login'
+      else setAuthed(true)
+    })
+  }, [])
 
   /* ── Auto-scroll ────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -977,6 +985,8 @@ export default function ZenModePage() {
   )
 
   /* ── Render ─────────────────────────────────────────────────────────── */
+  if (authed === null) return null
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-100">
       <div
