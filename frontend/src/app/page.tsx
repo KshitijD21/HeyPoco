@@ -758,11 +758,35 @@ function Toast({ message, isVisible, onClose }: { message: string; isVisible: bo
 /* ─── Early Access Modal ──────────────────────────────────────────────────── */
 function EarlyAccessModal({ isOpen, onClose, onSubmit }: { isOpen: boolean; onClose: () => void; onSubmit: () => void }) {
     const [formData, setFormData] = useState({ name: "", email: "", linkedin: "" });
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        // Here you would typically send the data to your backend
-        console.log("Form submitted:", formData);
+        setLoading(true);
+        setError(null);
+
+        const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        try {
+            const res = await fetch(`${apiBase}/api/waitlist`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    email: formData.email,
+                    message: [
+                        formData.name ? `Name: ${formData.name}` : "",
+                        formData.linkedin ? `LinkedIn: ${formData.linkedin}` : "",
+                    ].filter(Boolean).join(" | ") || undefined,
+                }),
+            });
+            if (!res.ok) throw new Error("Request failed");
+        } catch {
+            setError("Something went wrong. Please try again.");
+            setLoading(false);
+            return;
+        }
+
+        setLoading(false);
         onSubmit();
         onClose();
     };
@@ -844,19 +868,29 @@ function EarlyAccessModal({ isOpen, onClose, onSubmit }: { isOpen: boolean; onCl
 
                     {/* Buttons */}
                     <div className="pt-4 space-y-3">
+                        {error && (
+                            <p className="text-xs text-red-500 font-medium text-center">{error}</p>
+                        )}
                         <button
                             type="submit"
-                            className="w-full py-3.5 bg-[#1a1a1a] text-white rounded-full font-medium hover:bg-black transition-all"
+                            disabled={loading}
+                            className="w-full py-3.5 bg-[#1a1a1a] text-white rounded-full font-medium hover:bg-black disabled:opacity-50 transition-all"
                         >
-                            Request Access
+                            {loading ? "Sending..." : "Request Access"}
                         </button>
+                        <a
+                            href="/login"
+                            className="w-full py-3.5 bg-white border border-[#e5e5e5] text-[#1a1a1a] rounded-full font-medium hover:border-[#1a1a1a]/20 transition-all flex items-center justify-center gap-2"
+                        >
+                            Already have access? Sign in
+                        </a>
                         <a
                             href="https://github.com/anirudh3699/HeyPoco"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="w-full py-3.5 bg-white border border-[#e5e5e5] text-[#1a1a1a] rounded-full font-medium hover:border-[#1a1a1a]/20 transition-all flex items-center justify-center gap-2"
+                            className="w-full py-3.5 text-[#737373]/50 text-sm transition-all flex items-center justify-center gap-2 hover:text-[#1a1a1a] "
                         >
-                            <Github size={16} />
+                            <Github size={14} />
                             View Git Repo Instead
                         </a>
                     </div>
