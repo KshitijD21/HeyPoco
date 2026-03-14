@@ -1,3 +1,10 @@
+# Internal dev notes (not for repo)
+refer/
+
+# Scratch files
+supabase_status.json
+supabase_status.txt
+
 # pnpm
 node_modules/
 .pnpm-store/
