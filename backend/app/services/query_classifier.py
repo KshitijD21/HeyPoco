@@ -28,7 +28,7 @@ class QueryClassification:
     needs_synthesis: bool  # True for aggregation + semantic, False for list queries
 
     # Time window — calendar-aware, in user's timezone → converted to UTC
-    time_range_label: str  # today | yesterday | this_week | last_week | this_month | last_month | all_time
+    time_range_label: str  # today | yesterday | tomorrow | next_week | this_week | last_week | this_month | last_month | all_time
     date_from: Optional[datetime]  # UTC datetime, start of window
     date_to: Optional[datetime]  # UTC datetime, end of window (exclusive)
 
@@ -99,6 +99,8 @@ _NON_MERCHANT_WORDS = {
 _TIME_PHRASES = [
     ("today", "today"),
     ("yesterday", "yesterday"),
+    ("tomorrow", "tomorrow"),
+    ("next week", "next_week"),
     ("this week", "this_week"),
     ("last week", "last_week"),
     ("this month", "this_month"),
@@ -154,6 +156,16 @@ def _build_time_window(
     elif label == "yesterday":
         start = today_local - timedelta(days=1)
         end = today_local
+
+    elif label == "tomorrow":
+        start = today_local + timedelta(days=1)
+        end = today_local + timedelta(days=2)
+
+    elif label == "next_week":
+        days_until_monday = (7 - today_local.weekday()) % 7 or 7
+        next_monday = today_local + timedelta(days=days_until_monday)
+        start = next_monday
+        end = next_monday + timedelta(weeks=1)
 
     elif label == "this_week":
         # Monday of the current week

@@ -156,6 +156,7 @@ function ingestToReply(response: IngestResponse): string {
 }
 
 function queryToRichData(response: QueryResponse): RichData | undefined {
+    // Finance summary card
     if (response.finance_total != null && response.finance_total > 0) {
         const stats = response.sources
             .filter((s) => (s.extracted_fields as Record<string, unknown>)?.amount != null)
@@ -174,6 +175,42 @@ function queryToRichData(response: QueryResponse): RichData | undefined {
             stats,
         };
     }
+
+    // List query — show all sources as schedule items (events/tasks) or notes
+    if (response.sources.length > 0) {
+        const firstType = response.sources[0]?.type as string;
+
+        if (firstType === "event" || firstType === "task") {
+            const items = response.sources.slice(0, 8).map((s) => {
+                const ef = s.extracted_fields as Record<string, unknown>;
+                const label = (ef.title as string) || (ef.action as string) || s.raw_text.slice(0, 60);
+                const rawTime = (ef.scheduled_at as string) || (ef.deadline as string) || (s.entry_date as string) || "";
+                return { label, time: rawTime ? formatTime(rawTime) : "Scheduled" };
+            });
+            return { type: "schedule", items };
+        }
+
+        if (firstType === "journal") {
+            const s = response.sources[0];
+            const ef = s.extracted_fields as Record<string, unknown>;
+            const highlights = Array.isArray(ef.highlights) && ef.highlights.length > 0
+                ? (ef.highlights as string[]).join(" · ") : undefined;
+            return {
+                type: "journal",
+                body: highlights || (ef.notes as string) || undefined,
+                mood: (ef.mood as string) || undefined,
+                tags: Array.isArray(s.tags) ? s.tags : [],
+            };
+        }
+
+        // Generic list → note card with bullet list
+        const body = response.sources.slice(0, 5)
+            .map((s) => `• ${s.raw_text.slice(0, 80)}`)
+            .join("\n");
+        const tags = response.sources.flatMap((s) => s.tags ?? []).slice(0, 4);
+        return { type: "note", body, tags };
+    }
+
     return undefined;
 }
 

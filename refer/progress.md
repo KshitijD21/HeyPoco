@@ -2,6 +2,34 @@
 
 ---
 
+## March 14, 2026 — Query "Tomorrow" + Event vs Task Classification Fix
+
+### Root cause
+Querying "Can you please list all tomorrow's events?" returned "Nothing in your logs matches that yet." even when events were logged.
+
+Two bugs identified:
+
+**Bug 1 — Travel entries classified as `task` instead of `event`**
+- "I'm traveling from Phoenix to San Francisco tomorrow" → GPT-4o returned `type: task`
+- Querying for events then finds nothing
+- Fix: added explicit rule to extraction prompt distinguishing task vs event:
+  - `event` = scheduled occurrences (travel, trips, meetings, flights, parties)
+  - `task` = actionable to-dos (buy, send, fix, remind)
+  - Also: event must populate `title`, `scheduled_at`, `people`
+
+**Bug 2 — `"tomorrow"` not recognized as a time filter in queries**
+- `_TIME_PHRASES` in `query_classifier.py` had no entry for "tomorrow" or "next week"
+- Query fell through to `all_time` (no date filter) and vector search returned nothing
+- Fix: added `"tomorrow"` and `"next week"` to `_TIME_PHRASES` + `_build_time_window()`
+  - `tomorrow` → today+1 to today+2 (calendar day in user's timezone, converted to UTC)
+  - `next_week` → next Monday to following Sunday
+
+### Files changed
+- `backend/app/services/query_classifier.py` — added `tomorrow` + `next_week` time phrases and window builder cases
+- `backend/app/services/extraction_service.py` — added event-vs-task classification rule to GPT-4o prompt
+
+---
+
 ## March 14, 2026 — Rich Cards Expanded + Journal & Health Fixes
 
 ### `frontend/src/app/experiments/zen/page.tsx` — **UPDATED**

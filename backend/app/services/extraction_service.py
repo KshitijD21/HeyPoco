@@ -147,6 +147,8 @@ Rules:
 - If type is unclear, use general.
 - For amounts: extract all numbers that represent money.
 - For dates: resolve relative terms using today's date provided above.
+- For type classification: use "event" for scheduled occurrences (travel, trips, meetings, appointments, flights, parties, calls, dinners) that happen at a specific time. Use "task" only for actionable to-dos the user needs to complete (buy, send, fix, remind, call someone).
+- For event: set title to a short description, scheduled_at to the inferred datetime, and people to anyone mentioned.
 - For journal: always populate highlights as a list of 1-3 key things the person mentioned or felt. Strip meta-phrases like "I want to journal", "just logging", "adding a note" from highlights — capture only the actual content.
 - For journal: set mood to positive/negative/neutral based on the overall tone.
 """
