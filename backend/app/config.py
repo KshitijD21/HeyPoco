@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     openai_whisper_model: str = "whisper-1"
     openai_embedding_model: str = "text-embedding-3-small"
 
+    # Waitlist / access requests
+    resend_api_key: Optional[str] = None
+    waitlist_notify_email: Optional[str] = None
+
     # Dev / testing
     test_user_id: Optional[str] = None
 
