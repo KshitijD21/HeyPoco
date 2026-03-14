@@ -2,6 +2,34 @@
 
 ---
 
+## March 14, 2026 — Frontend Chat UI Connected to Backend
+
+Replaced all mock data in the Zen chat UI (`/experiments/zen`) with real end-to-end API calls. The UI was fully functional visually but entirely disconnected from the backend — every response was hardcoded.
+
+### `frontend/src/app/experiments/zen/page.tsx` — **REWRITTEN**
+- Removed all mock arrays (`MOCK_VOICE_LOGS`, `TEXT_REPLIES`, `getTextReply`) — ~150 lines of mock logic deleted
+- **Text flow**: `isQuery()` helper detects query vs log intent using question words and `?` suffix
+  - Query → `POST /api/query` with `user_timezone`
+  - Log → `POST /api/ingest` with `raw_text` + `user_timezone`
+- **Voice flow**: replaced simulated 3.5s timeout with real `useVoiceRecorder` hook
+  - `startRecording()` → MediaRecorder captures audio
+  - `stopRecording()` → returns WebM blob → `POST /api/ingest` with `audio_file`
+  - Transcribed `raw_text` from response shown as user message bubble
+- **Rich card mapping** from real backend responses:
+  - `finance` entry → `ExpenseCard` (amount + merchant from `extracted_fields`)
+  - `task` / `event` entry → `ScheduleCard` (action/title + scheduled_at/deadline)
+  - Query with `finance_total` → `SummaryCard` (total + per-merchant breakdown from sources)
+  - All other entries → plain text bubble with category pill
+- **Error state**: red-tinted bubble on API failure (auth errors, network, 5xx)
+- Auth: flows through existing `api-client.ts` → Supabase session → `Authorization: Bearer` header
+- `user_timezone` passed via `Intl.DateTimeFormat().resolvedOptions().timeZone` on every call
+
+### `frontend/src/types/index.ts` — **UPDATED**
+- `QueryRequest`: added `user_timezone?: string` to match backend schema
+- `QueryResponse`: added `fallback_triggered`, `finance_total`, `confidence` fields to match `QueryResponse` dataclass in `backend/app/schemas/entry.py`
+
+---
+
 ## March 10, 2026 — Retrieval Pipeline (Complete Rebuild)
 
 Full rewrite of the retrieval/query pipeline. The old `query_service.py` had fundamental bugs (wrong similarity thresholds, rolling day counts instead of calendar weeks, GPT-4o doing finance math, no person queries, no fallback states). Rebuilt from scratch following the architecture spec §11–§13.

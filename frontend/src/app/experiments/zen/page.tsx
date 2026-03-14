@@ -1,8 +1,11 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mic, Send, Pause, Sparkles } from "lucide-react";
+import { ingestEntry, queryEntries } from "@/lib/api-client";
+import { useVoiceRecorder } from "@/hooks/use-voice-recorder";
+import type { IngestResponse, QueryResponse } from "@/types";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -23,181 +26,100 @@ interface ChatMessage {
     category?: string;
     timestamp: Date;
     richData?: RichData;
+    error?: boolean;
 }
 
-/* ─── Mock AI responses ──────────────────────────────────────────────────── */
+/* ─── Helpers ────────────────────────────────────────────────────────────── */
 
-const MOCK_VOICE_LOGS = [
-    {
-        text: "I spent $12 on coffee at Starbucks.",
-        reply: "Got it. $12.00 tracked.",
-        category: "EXPENSE",
-        richData: { type: "expense" as const, amount: "$12.00", merchant: "Starbucks" }
-    },
-    {
-        text: "Remind me to call Mom tomorrow at 5pm.",
-        reply: "Commitment noted.",
-        category: "COMMITMENT",
-        richData: { type: "schedule" as const, items: [{ label: "Call Mom", time: "Tomorrow, 5:00 PM" }] }
-    },
-    {
-        text: "How much did I spend today?",
-        reply: "You've spent $147.00 so far today across 3 entries.",
-        category: "QUERY",
-        richData: {
-            type: "summary" as const,
-            totalAmount: "$147.00",
-            count: 3,
-            stats: [
-                { label: "Food & Drinks", value: "$62.00", color: "#ff6b6b" },
-                { label: "Transport", value: "$45.00", color: "#4ecdc4" },
-                { label: "Others", value: "$40.00", color: "#95a5a6" }
-            ]
-        }
-    },
-    { text: "Met Sarah for lunch, we talked about the project.", reply: "Event logged.", category: "EVENT" },
-    {
-        text: "What do I have tomorrow?",
-        reply: "You have 2 commitments tomorrow.",
-        category: "QUERY",
-        richData: {
-            type: "schedule" as const,
-            items: [
-                { label: "Call Mom", time: "5:00 PM" },
-                { label: "Gym Session", time: "6:00 PM" }
-            ]
-        }
-    },
-    { text: "Paid $50 for dinner, shared with John and Mike.", reply: "Got it. $50.00 tracked.", category: "EXPENSE", richData: { type: "expense" as const, amount: "$50.00", merchant: "Dinner" } },
-    {
-        text: "Summary of my coffee expenses?",
-        reply: "You've visited Starbucks twice this week.",
-        category: "QUERY",
-        richData: {
-            type: "summary" as const,
-            totalAmount: "$24.00",
-            count: 2,
-            stats: [{ label: "Starbucks", value: "$24.00", color: "#3b82f6" }]
-        }
-    },
-    { text: "Going to the gym at 6pm today.", reply: "Commitment noted.", category: "COMMITMENT", richData: { type: "schedule" as const, items: [{ label: "Gym Session", time: "Today, 6:00 PM" }] } },
-    { text: "Bought groceries for $85.", reply: "Got it. $85.00 tracked.", category: "EXPENSE", richData: { type: "expense" as const, amount: "$85.00", merchant: "Groceries" } },
-    {
-        text: "How much did I spend this month?",
-        reply: "You've spent $1,240.00 this month.",
-        category: "QUERY",
-        richData: {
-            type: "summary" as const,
-            totalAmount: "$1,240.00",
-            count: 42,
-            stats: [
-                { label: "Rent & Utilities", value: "$850.00", color: "#3b82f6" },
-                { label: "Food & Dining", value: "$280.00", color: "#ff6b6b" },
-                { label: "Transport", value: "$65.00", color: "#4ecdc4" },
-                { label: "Entertainment", value: "$45.00", color: "#a66cff" }
-            ]
-        }
-    },
-    { text: "Applied to the product manager role at Stripe.", reply: "Career entry saved.", category: "NOTE" },
-];
+function isQuery(text: string): boolean {
+    const lower = text.toLowerCase().trim();
+    const queryWords = [
+        "how much", "how many", "what", "when", "who", "where", "why",
+        "show me", "list", "find", "search", "tell me", "give me",
+        "did i", "have i", "do i", "summary", "total", "spent", "any",
+    ];
+    return queryWords.some((w) => lower.includes(w)) && lower.endsWith("?") ||
+        queryWords.slice(0, 6).some((w) => lower.startsWith(w));
+}
 
-const TEXT_REPLIES: Record<string, { reply: string; category: string }> = {
-    default: { reply: "Noted.", category: "NOTE" },
-};
+function ingestToRichData(response: IngestResponse): RichData | undefined {
+    const f = response.extracted_fields as Record<string, unknown>;
 
-function getTextReply(text: string): { reply: string; category: string; richData?: RichData } {
-    const lower = text.toLowerCase();
-
-    // Check for questions/queries
-    if (lower.includes("how much") || lower.includes("what") || lower.includes("summary") || lower.includes("list") || lower.includes("show me")) {
-        if (lower.includes("spend") || lower.includes("spent") || lower.includes("expensive") || lower.includes("price") || lower.includes("cost")) {
-            if (lower.includes("month")) {
-                return {
-                    reply: "You've spent $1,240.00 this month.",
-                    category: "QUERY",
-                    richData: {
-                        type: "summary" as const,
-                        totalAmount: "$1,240.00",
-                        count: 42,
-                        stats: [
-                            { label: "Rent & Utilities", value: "$850.00", color: "#3b82f6" },
-                            { label: "Food & Dining", value: "$280.00", color: "#ff6b6b" },
-                            { label: "Transport", value: "$65.00", color: "#4ecdc4" },
-                            { label: "Entertainment", value: "$45.00", color: "#a66cff" }
-                        ]
-                    }
-                };
-            }
-            return {
-                reply: "You've spent $147.00 so far today across 3 entries.",
-                category: "QUERY",
-                richData: {
-                    type: "summary" as const,
-                    totalAmount: "$147.00",
-                    count: 3,
-                    stats: [
-                        { label: "Food & Drinks", value: "$62.00", color: "#ff6b6b" },
-                        { label: "Transport", value: "$45.00", color: "#4ecdc4" },
-                        { label: "Others", value: "$40.00", color: "#95a5a6" }
-                    ]
-                }
-            };
-        }
-        if (lower.includes("tomorrow") || lower.includes("next") || lower.includes("schedule") || lower.includes("todo")) {
-            return {
-                reply: "You have 2 commitments tomorrow.",
-                category: "QUERY",
-                richData: {
-                    type: "schedule" as const,
-                    items: [
-                        { label: "Call Mom", time: "5:00 PM" },
-                        { label: "Gym Session", time: "6:00 PM" }
-                    ]
-                }
-            };
-        }
-        if (lower.includes("coffee") || lower.includes("starbucks")) {
-            return {
-                reply: "You've visited Starbucks twice this week.",
-                category: "QUERY",
-                richData: {
-                    type: "summary" as const,
-                    totalAmount: "$24.00",
-                    count: 2,
-                    stats: [{ label: "Starbucks", value: "$24.00", color: "#3b82f6" }]
-                }
-            };
-        }
-        return { reply: "I've pulled up your recent logs for you.", category: "QUERY" };
+    if (response.type === "finance") {
+        const amount = f.amount != null ? `$${Number(f.amount).toFixed(2)}` : "";
+        const merchant = (f.merchant as string) || (f.category as string) || "Purchase";
+        return { type: "expense", amount, merchant };
     }
 
-    if (lower.includes("$") || lower.includes("spent") || lower.includes("paid") || lower.includes("bought")) {
-        const match = text.match(/\$?(\d+(?:\.\d{2})?)/);
-        const amount = match ? `$${parseFloat(match[1]).toFixed(2)}` : "";
-        const merchantMatch = text.match(/at\s+([A-Za-z\s]+)(?:[.!]|$)/);
-        const merchant = merchantMatch ? merchantMatch[1].trim() : "Purchase";
+    if (response.type === "task" || response.type === "event") {
+        const label = (f.action as string) || (f.title as string) || response.raw_text.slice(0, 50);
+        const time = (f.scheduled_at as string) || (f.deadline as string) || "Scheduled";
+        return { type: "schedule", items: [{ label, time }] };
+    }
+
+    return undefined;
+}
+
+function ingestToCategory(response: IngestResponse): string {
+    const map: Record<string, string> = {
+        finance: "EXPENSE",
+        task: "TASK",
+        event: "EVENT",
+        journal: "JOURNAL",
+        health: "HEALTH",
+        note: "NOTE",
+        general: "NOTE",
+    };
+    return map[response.type] || "NOTE";
+}
+
+function ingestToReply(response: IngestResponse): string {
+    const f = response.extracted_fields as Record<string, unknown>;
+    if (response.type === "finance") {
+        const amount = f.amount != null ? `$${Number(f.amount).toFixed(2)}` : "";
+        return `Got it. ${amount} tracked.`;
+    }
+    if (response.type === "task") return "Task noted.";
+    if (response.type === "event") return "Event logged.";
+    if (response.type === "journal") return "Journal entry saved.";
+    if (response.type === "health") return "Health note saved.";
+    return "Noted.";
+}
+
+function queryToRichData(response: QueryResponse): RichData | undefined {
+    if (response.finance_total != null && response.finance_total > 0) {
+        const stats = response.sources
+            .filter((s) => {
+                const ef = s.extracted_fields as Record<string, unknown>;
+                return ef?.amount != null;
+            })
+            .slice(0, 5)
+            .map((s) => {
+                const ef = s.extracted_fields as Record<string, unknown>;
+                return {
+                    label: (ef.merchant as string) || (ef.category as string) || "Purchase",
+                    value: `$${Number(ef.amount).toFixed(2)}`,
+                };
+            });
+
         return {
-            reply: `Got it. ${amount} tracked.`,
-            category: "EXPENSE",
-            richData: { type: "expense" as const, amount, merchant }
+            type: "summary",
+            totalAmount: `$${response.finance_total.toFixed(2)}`,
+            count: response.sources.length,
+            stats,
         };
     }
-    if (lower.includes("remind") || lower.includes("meeting") || lower.includes("gym") || lower.includes("call")) {
-        const items = [{ label: text.length > 30 ? text.substring(0, 30) + "..." : text, time: "Scheduled" }];
-        return { reply: "Commitment noted.", category: "COMMITMENT", richData: { type: "schedule" as const, items } };
-    }
-    if (lower.includes("met") || lower.includes("went") || lower.includes("visited") || lower.includes("lunch") || lower.includes("dinner")) {
-        return { reply: "Event logged.", category: "EVENT" };
-    }
-    return TEXT_REPLIES.default;
+    return undefined;
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
     EXPENSE: "#ff6b6b",
-    COMMITMENT: "#4ecdc4",
+    TASK: "#4ecdc4",
     EVENT: "#a66cff",
+    JOURNAL: "#f59e0b",
+    HEALTH: "#10b981",
     NOTE: "#95a5a6",
-    QUERY: "#3b82f6", // Blue for queries
+    QUERY: "#3b82f6",
 };
 
 /* ─── Rich Components ────────────────────────────────────────────────────── */
@@ -233,25 +155,27 @@ function SummaryCard({ data }: { data: RichData }) {
                 </div>
                 <span className="text-[10px] font-medium text-white/60 mb-1">{data.count} entries</span>
             </div>
-            <div className="space-y-2.5">
-                {data.stats?.map((stat, i) => (
-                    <div key={i} className="flex flex-col gap-1.5">
-                        <div className="flex justify-between text-[11px] font-medium tracking-tight">
-                            <span className="text-white/60">{stat.label}</span>
-                            <span>{stat.value}</span>
+            {data.stats && data.stats.length > 0 && (
+                <div className="space-y-2.5">
+                    {data.stats.map((stat, i) => (
+                        <div key={i} className="flex flex-col gap-1.5">
+                            <div className="flex justify-between text-[11px] font-medium tracking-tight">
+                                <span className="text-white/60">{stat.label}</span>
+                                <span>{stat.value}</span>
+                            </div>
+                            <div className="h-1 bg-white/10 rounded-full overflow-hidden">
+                                <motion.div
+                                    initial={{ width: 0 }}
+                                    animate={{ width: "65%" }}
+                                    transition={{ delay: 0.5 + i * 0.1, duration: 1 }}
+                                    className="h-full rounded-full"
+                                    style={{ backgroundColor: stat.color || "#3b82f6" }}
+                                />
+                            </div>
                         </div>
-                        <div className="h-1 bg-white/10 rounded-full overflow-hidden">
-                            <motion.div
-                                initial={{ width: 0 }}
-                                animate={{ width: "65%" }}
-                                transition={{ delay: 0.5 + i * 0.1, duration: 1 }}
-                                className="h-full rounded-full"
-                                style={{ backgroundColor: stat.color }}
-                            />
-                        </div>
-                    </div>
-                ))}
-            </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
@@ -286,10 +210,11 @@ function ScheduleCard({ data }: { data: RichData }) {
 export default function ZenModePage() {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [inputText, setInputText] = useState("");
-    const [isListening, setIsListening] = useState(false);
     const [processing, setProcessing] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
-    const mockIdx = useRef(0);
+
+    const { state: recorderState, startRecording, stopRecording } = useVoiceRecorder();
+    const isListening = recorderState === "recording";
 
     /* ── Auto-scroll ────────────────────────────────────────────────────── */
     useEffect(() => {
@@ -298,79 +223,96 @@ export default function ZenModePage() {
         }
     }, [messages, isListening, processing]);
 
-    /* ── Auto-stop listening after 3.5s (simulated) ─────────────────────── */
-    useEffect(() => {
-        let timer: NodeJS.Timeout;
-        if (isListening) {
-            timer = setTimeout(() => stopListeningAndProcess(), 3500);
-        }
-        return () => clearTimeout(timer);
-    }, [isListening]);
-
-    /* ── Voice flow ─────────────────────────────────────────────────────── */
-    const stopListeningAndProcess = useCallback(() => {
-        setIsListening(false);
-
-        const mock = MOCK_VOICE_LOGS[mockIdx.current % MOCK_VOICE_LOGS.length];
-        mockIdx.current += 1;
-
-        // User message immediately
+    /* ── Add a poco message ─────────────────────────────────────────────── */
+    const addPocoMessage = useCallback((
+        text: string,
+        category?: string,
+        richData?: RichData,
+        error?: boolean,
+    ) => {
         setMessages((prev) => [
             ...prev,
-            { id: crypto.randomUUID(), text: mock.text, sender: "user", timestamp: new Date() },
+            { id: crypto.randomUUID(), text, sender: "poco", category, richData, timestamp: new Date(), error },
         ]);
-
-        // Poco reply after delay
-        setProcessing(true);
-        setTimeout(() => {
-            setMessages((prev) => [
-                ...prev,
-                {
-                    id: crypto.randomUUID(),
-                    text: mock.reply,
-                    sender: "poco",
-                    category: mock.category,
-                    richData: mock.richData,
-                    timestamp: new Date(),
-                },
-            ]);
-            setProcessing(false);
-        }, 1200);
     }, []);
 
-    const toggleListening = useCallback(() => {
+    /* ── Process text: ingest or query ──────────────────────────────────── */
+    const processText = useCallback(async (text: string) => {
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        setProcessing(true);
+
+        try {
+            if (isQuery(text)) {
+                const result = await queryEntries({ question: text, user_timezone: timezone });
+                const richData = queryToRichData(result);
+                addPocoMessage(result.answer, "QUERY", richData);
+            } else {
+                const result = await ingestEntry({ rawText: text, timezone });
+                const richData = ingestToRichData(result);
+                const category = ingestToCategory(result);
+                const reply = ingestToReply(result);
+                addPocoMessage(reply, category, richData);
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : "Something went wrong.";
+            addPocoMessage(msg, undefined, undefined, true);
+        } finally {
+            setProcessing(false);
+        }
+    }, [addPocoMessage]);
+
+    /* ── Voice flow ─────────────────────────────────────────────────────── */
+    const stopListeningAndProcess = useCallback(async () => {
+        const blob = await stopRecording();
+        if (!blob) return;
+
+        setProcessing(true);
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+        try {
+            const result = await ingestEntry({ audioBlob: blob, timezone });
+
+            // Show transcribed text as user message
+            setMessages((prev) => [
+                ...prev,
+                { id: crypto.randomUUID(), text: result.raw_text, sender: "user", timestamp: new Date() },
+            ]);
+
+            const richData = ingestToRichData(result);
+            const category = ingestToCategory(result);
+            const reply = ingestToReply(result);
+            addPocoMessage(reply, category, richData);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : "Voice processing failed.";
+            addPocoMessage(msg, undefined, undefined, true);
+        } finally {
+            setProcessing(false);
+        }
+    }, [stopRecording, addPocoMessage]);
+
+    const toggleListening = useCallback(async () => {
         if (processing) return;
         if (isListening) {
-            stopListeningAndProcess();
+            await stopListeningAndProcess();
         } else {
-            setIsListening(true);
+            await startRecording();
         }
-    }, [isListening, processing, stopListeningAndProcess]);
+    }, [isListening, processing, startRecording, stopListeningAndProcess]);
 
     /* ── Text flow ──────────────────────────────────────────────────────── */
     const handleSendText = useCallback(
-        (text: string) => {
+        async (text: string) => {
             if (!text.trim() || processing) return;
             setInputText("");
 
-            // User message
             setMessages((prev) => [
                 ...prev,
                 { id: crypto.randomUUID(), text, sender: "user", timestamp: new Date() },
             ]);
 
-            const { reply, category, richData } = getTextReply(text);
-
-            setProcessing(true);
-            setTimeout(() => {
-                setMessages((prev) => [
-                    ...prev,
-                    { id: crypto.randomUUID(), text: reply, sender: "poco", category, richData, timestamp: new Date() },
-                ]);
-                setProcessing(false);
-            }, 800);
+            await processText(text);
         },
-        [processing]
+        [processing, processText]
     );
 
     /* ── Render ─────────────────────────────────────────────────────────── */
@@ -429,7 +371,9 @@ export default function ZenModePage() {
                                 <div
                                     className={`max-w-[85%] px-5 py-3.5 text-[15px] leading-relaxed font-light shadow-sm ${msg.sender === "user"
                                         ? "bg-[#2d2d2d] text-white rounded-2xl rounded-br-sm"
-                                        : "bg-white border border-[#e5e5e5]/50 text-[#1a1a1a] rounded-2xl rounded-bl-sm"
+                                        : msg.error
+                                            ? "bg-[#ff6b6b]/10 border border-[#ff6b6b]/20 text-[#ff6b6b] rounded-2xl rounded-bl-sm"
+                                            : "bg-white border border-[#e5e5e5]/50 text-[#1a1a1a] rounded-2xl rounded-bl-sm"
                                         }`}
                                 >
                                     {msg.text}
@@ -454,7 +398,6 @@ export default function ZenModePage() {
                         </motion.div>
                     ))}
 
-
                     {/* Processing typing dots */}
                     {processing && (
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-start">
@@ -473,16 +416,15 @@ export default function ZenModePage() {
                             </div>
                         </motion.div>
                     )}
-
                 </div>
 
                 {/* ── Input Area ──────────────────────────────────────────────── */}
                 <div className="relative z-20 px-6 pb-8 pt-4 bg-[#faf9f6]/80 backdrop-blur-lg border-t border-[#e5e5e5]/20">
-                    {/* Mic side fade gradient (Bottom of chat) - more compact and lower */}
+                    {/* Bottom-of-chat fade gradient */}
                     <div className="absolute top-0 left-0 right-0 h-16 -translate-y-full bg-gradient-to-t from-[#faf9f6] to-transparent pointer-events-none" />
 
                     <div className="flex flex-col items-center gap-5">
-                        {/* Listening visualization — waveform bars positioned ABOVE mic */}
+                        {/* Listening visualization */}
                         <AnimatePresence>
                             {isListening && (
                                 <motion.div
@@ -518,7 +460,6 @@ export default function ZenModePage() {
 
                         {/* Mic Button */}
                         <div className="relative">
-                            {/* Pulse glow */}
                             <div
                                 className={`absolute inset-0 rounded-full bg-[#2d2d2d]/10 blur-xl transition-all duration-1000 ${isListening ? "scale-150 opacity-100" : "scale-75 opacity-0"
                                     }`}
@@ -559,7 +500,7 @@ export default function ZenModePage() {
                             </motion.button>
                         </div>
 
-                        {/* Text Input (always visible when not listening) */}
+                        {/* Text Input */}
                         <div
                             className={`w-full transition-all duration-500 ${isListening ? "opacity-0 translate-y-10 pointer-events-none" : "opacity-100 translate-y-0"
                                 }`}

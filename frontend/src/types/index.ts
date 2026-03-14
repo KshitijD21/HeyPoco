@@ -85,6 +85,7 @@ export interface ExtractRequest {
 
 export interface QueryRequest {
   question: string
+  user_timezone?: string
 }
 
 export interface EntryFilterParams {
@@ -121,6 +122,9 @@ export interface QueryResponse {
   answer: string
   sources: Entry[]
   has_data: boolean
+  fallback_triggered?: boolean
+  finance_total?: number | null
+  confidence?: string
 }
 
 // ── UI State Types ──────────────────────────────────────────────────────────
