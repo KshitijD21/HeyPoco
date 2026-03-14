@@ -1,51 +1,37 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function SignupPage() {
-    const router = useRouter();
     const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
-    const [confirmPassword, setConfirmPassword] = useState("");
-    const [error, setError] = useState<string | null>(null);
+    const [message, setMessage] = useState("");
+    const [submitted, setSubmitted] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-    const handleSignup = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         setError(null);
 
-        if (password !== confirmPassword) {
-            setError("Passwords do not match");
-            setLoading(false);
-            return;
-        }
-
-        if (password.length < 6) {
-            setError("Password must be at least 6 characters");
-            setLoading(false);
-            return;
-        }
-
-        const supabase = createClient();
-
-        const { error: authError } = await supabase.auth.signUp({
-            email,
-            password,
+        const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const res = await fetch(`${apiBase}/api/waitlist`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, message }),
         });
 
-        if (authError) {
-            setError(authError.message);
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            setError(data.error || "Something went wrong. Please try again.");
             setLoading(false);
             return;
         }
 
-        router.push("/dashboard");
-        router.refresh();
+        setSubmitted(true);
+        setLoading(false);
     };
 
     return (
@@ -64,110 +50,88 @@ export default function SignupPage() {
                     </span>
                 </div>
                 <h1 className="text-[40px] font-medium text-[#1a1a1a] tracking-tight text-center leading-[1.1]">
-                    Get started.
+                    Request access.
                 </h1>
+                <p className="text-[14px] text-[#1a1a1a]/40 text-center max-w-[260px] leading-relaxed">
+                    HeyPoco is in private beta. Leave your email and we&apos;ll reach out.
+                </p>
             </div>
 
-            {/* Form */}
-            <form onSubmit={handleSignup} className="space-y-8">
-                <div className="space-y-5">
-                    <div className="space-y-2">
-                        <label htmlFor="email" className="text-[10px] font-bold text-[#1a1a1a]/40 uppercase tracking-[0.15em] ml-1">
-                            Email address
-                        </label>
-                        <input
-                            id="email"
-                            type="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            required
-                            className="w-full h-14 rounded-2xl border border-[#e5e5e5] bg-white px-5 text-[15px] text-[#1a1a1a] placeholder:text-[#1a1a1a]/15 focus:outline-none focus:ring-1 focus:ring-[#1a1a1a] transition-all shadow-[0_2px_10_rgba(0,0,0,0.03)]"
-                            placeholder="name@example.com"
-                        />
-                    </div>
-
-                    <div className="space-y-2">
-                        <label htmlFor="password" className="text-[10px] font-bold text-[#1a1a1a]/40 uppercase tracking-[0.15em] ml-1">
-                            Password
-                        </label>
-                        <input
-                            id="password"
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            required
-                            className="w-full h-14 rounded-2xl border border-[#e5e5e5] bg-white px-5 text-[15px] text-[#1a1a1a] placeholder:text-[#1a1a1a]/15 focus:outline-none focus:ring-1 focus:ring-[#1a1a1a] transition-all shadow-[0_2px_10px_-4px_rgba(0,0,0,0.03)]"
-                            placeholder="••••••••"
-                        />
-                    </div>
-
-                    <div className="space-y-2">
-                        <label htmlFor="confirm-password" className="text-[10px] font-bold text-[#1a1a1a]/40 uppercase tracking-[0.15em] ml-1">
-                            Confirm Password
-                        </label>
-                        <input
-                            id="confirm-password"
-                            type="password"
-                            value={confirmPassword}
-                            onChange={(e) => setConfirmPassword(e.target.value)}
-                            required
-                            className="w-full h-14 rounded-2xl border border-[#e5e5e5] bg-white px-5 text-[15px] text-[#1a1a1a] placeholder:text-[#1a1a1a]/15 focus:outline-none focus:ring-1 focus:ring-[#1a1a1a] transition-all shadow-[0_2px_10px_-4px_rgba(0,0,0,0.03)]"
-                            placeholder="••••••••"
-                        />
-                    </div>
-                </div>
-
-                {error && (
-                    <motion.p
-                        initial={{ opacity: 0, scale: 0.98 }}
+            <AnimatePresence mode="wait">
+                {submitted ? (
+                    <motion.div
+                        key="success"
+                        initial={{ opacity: 0, scale: 0.97 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        className="text-xs text-red-500 font-medium text-center"
+                        className="flex flex-col items-center gap-5 py-8"
                     >
-                        {error}
-                    </motion.p>
+                        <div className="w-14 h-14 rounded-full bg-[#1a1a1a] flex items-center justify-center">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                        </div>
+                        <div className="text-center space-y-1">
+                            <p className="text-[16px] font-medium text-[#1a1a1a]">You&apos;re on the list.</p>
+                            <p className="text-[13px] text-[#737373]">We&apos;ll be in touch at <span className="font-medium text-[#1a1a1a]">{email}</span></p>
+                        </div>
+                    </motion.div>
+                ) : (
+                    <motion.form
+                        key="form"
+                        onSubmit={handleSubmit}
+                        className="space-y-8"
+                    >
+                        <div className="space-y-5">
+                            <div className="space-y-2">
+                                <label htmlFor="email" className="text-[10px] font-bold text-[#1a1a1a]/40 uppercase tracking-[0.15em] ml-1">
+                                    Email address
+                                </label>
+                                <input
+                                    id="email"
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    required
+                                    className="w-full h-14 rounded-2xl border border-[#e5e5e5] bg-white px-5 text-[15px] text-[#1a1a1a] placeholder:text-[#1a1a1a]/15 focus:outline-none focus:ring-1 focus:ring-[#1a1a1a] transition-all"
+                                    placeholder="name@example.com"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label htmlFor="message" className="text-[10px] font-bold text-[#1a1a1a]/40 uppercase tracking-[0.15em] ml-1">
+                                    Why do you want access? <span className="normal-case font-normal opacity-60">(optional)</span>
+                                </label>
+                                <textarea
+                                    id="message"
+                                    value={message}
+                                    onChange={(e) => setMessage(e.target.value)}
+                                    rows={3}
+                                    className="w-full rounded-2xl border border-[#e5e5e5] bg-white px-5 py-4 text-[15px] text-[#1a1a1a] placeholder:text-[#1a1a1a]/15 focus:outline-none focus:ring-1 focus:ring-[#1a1a1a] transition-all resize-none"
+                                    placeholder="I want to use HeyPoco to..."
+                                />
+                            </div>
+                        </div>
+
+                        {error && (
+                            <motion.p
+                                initial={{ opacity: 0, scale: 0.98 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                className="text-xs text-red-500 font-medium text-center"
+                            >
+                                {error}
+                            </motion.p>
+                        )}
+
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full h-14 rounded-2xl bg-[#1a1a1a] text-[15px] font-bold text-white hover:bg-black disabled:opacity-50 transition-all shadow-xl shadow-black/10 active:scale-[0.98]"
+                        >
+                            {loading ? "Sending..." : "Request access"}
+                        </button>
+                    </motion.form>
                 )}
-
-                <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full h-14 rounded-2xl bg-[#1a1a1a] text-[15px] font-bold text-white hover:bg-black disabled:opacity-50 transition-all shadow-xl shadow-black/10 active:scale-[0.98] mt-2"
-                >
-                    {loading ? "Creating account..." : "Create account"}
-                </button>
-            </form>
-
-            <div className="space-y-6">
-                <div className="flex items-center gap-4 px-2">
-                    <div className="h-[1px] flex-1 bg-[#e5e5e5]/50" />
-                    <span className="text-[10px] font-bold text-[#1a1a1a]/20 uppercase tracking-[0.2em]">or</span>
-                    <div className="h-[1px] flex-1 bg-[#e5e5e5]/50" />
-                </div>
-
-                <button
-                    type="button"
-                    className="w-full h-14 rounded-2xl border border-[#e5e5e5] bg-white flex items-center justify-center gap-3 text-[15px] font-medium text-[#1a1a1a] hover:bg-[#faf9f6] transition-all shadow-[0_2px_10px_-4px_rgba(0,0,0,0.03)] active:scale-[0.98]"
-                >
-                    <svg className="w-5 h-5" viewBox="0 0 24 24">
-                        <path
-                            fill="currentColor"
-                            d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                        />
-                        <path
-                            fill="currentColor"
-                            d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                        />
-                        <path
-                            fill="currentColor"
-                            d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"
-                        />
-                        <path
-                            fill="currentColor"
-                            d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                        />
-                    </svg>
-                    Continue with Google
-                </button>
-            </div>
+            </AnimatePresence>
 
             <div className="flex flex-col items-center space-y-5 pt-8 border-t border-[#e5e5e5]/40">
                 <p className="text-[14px] text-[#1a1a1a]/40 tracking-tight">
