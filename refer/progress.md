@@ -2,6 +2,137 @@
 
 ---
 
+## March 14, 2026 — Profile Avatar with Logout
+
+### `frontend/src/app/experiments/zen/page.tsx` — **UPDATED**
+
+**New `ProfileAvatar` component:**
+- Top-right corner of the chat panel (`absolute top-4 right-4 z-30`)
+- Avatar image from **DiceBear `thumbs` collection** — `https://api.dicebear.com/9.x/thumbs/svg?seed=<name>`
+- 15 named seeds: Felix, Aneka, Zephyr, Kira, Nova, Orion, Pico, Sage, Taro, Lumi, Blaze, Cleo, Drift, Echo, Frost
+- `pickSeed(email)` hashes the user's email to a stable index — same account always gets the same character
+- No package install — plain `<img>` tag fetches SVG from DiceBear CDN
+- Click to open dropdown: larger avatar (40×40) + signed-in email + Sign out button
+- Dropdown closes on outside click
+- Logout: `supabase.auth.signOut()` → redirect to `/login`
+- Styled to match chat UI: `rounded-full` button, `rounded-2xl` dropdown, `#faf9f6` hover
+
+### Dependencies added to zen page
+- `useRouter` from `next/navigation`
+- `createClient` from `@/lib/supabase/client`
+- `LogOut` icon from `lucide-react`
+
+---
+
+## March 14, 2026 — Waitlist Backend Endpoint + Resend Fix
+
+### `backend/app/routers/waitlist.py` — **NEW**
+- `POST /api/waitlist` — public endpoint, no auth required
+- Accepts `{ email, message }` JSON body (email validated via Pydantic `EmailStr`)
+- **Step 1:** upserts row into `waitlist` Supabase table (source of truth — never lost)
+- **Step 2:** sends email notification via Resend REST API (best-effort, non-blocking)
+- Uses `httpx.AsyncClient` for async HTTP to Resend
+- Logs success/failure at each step; never returns error to user if email fails
+
+### `backend/app/config.py` — **UPDATED**
+- Added `resend_api_key: Optional[str]` and `waitlist_notify_email: Optional[str]`
+
+### `backend/app/main.py` — **UPDATED**
+- Registered `waitlist.router` (always mounted, not debug-only — it's a public endpoint)
+
+### `backend/.env.example` — **UPDATED**
+- Added `RESEND_API_KEY` and `WAITLIST_NOTIFY_EMAIL`
+
+### `supabase/migrations/006_create_waitlist.sql` — **NEW**
+- Creates `waitlist` table: `id`, `email` (unique), `message`, `created_at`
+- RLS: public INSERT allowed, SELECT blocked (view via Supabase dashboard only)
+
+### `frontend/src/app/(auth)/signup/page.tsx` — **UPDATED**
+- Request Access button now calls `POST $NEXT_PUBLIC_API_URL/api/waitlist` (backend)
+- Was calling Next.js `/api/request-access` route (frontend-only, now unused)
+
+### `frontend/src/app/api/request-access/route.ts` — now unused
+- Can be deleted; signup page no longer calls it
+
+### Resend sender fix
+- Changed `from` address from `noreply@heypoco.com` (unverified domain, silently rejected) to `onboarding@resend.dev` (Resend shared sender, works without domain verification)
+- Limitation: Resend test mode only delivers to the account owner's verified email; all waitlist entries are stored in DB regardless
+
+### Add to `backend/.env`:
+```
+RESEND_API_KEY=re_your_key
+WAITLIST_NOTIFY_EMAIL=kshitijdumbreprojects@gmail.com
+```
+
+---
+
+## March 14, 2026 — Rich Cards: TravelCard + Expense Split + Query List Rendering
+
+### `frontend/src/app/experiments/zen/page.tsx` — **UPDATED**
+
+**New TravelCard:**
+- Detects travel entries via keywords in `raw_text` (travel, flight, trip, fly, drive, train, etc.)
+- Extracts "City A → City B" route using regex on raw_text / extracted_fields.title
+- Shows pink Plane icon, FROM/TO cities large, departure time below
+- Falls back to plain label + time if route can't be parsed
+- Category pill: `TRAVEL` (pink `#ec4899`)
+
+**Expense split detection:**
+- Detects "split"/"shared"/"between" in raw_text + `person` in extracted_fields
+- Card redesigned to match landing page: dark `#1a1a1a` panel with "YOU PAID $X" + "Person owes you $Y" in green
+- Split amount = total ÷ 2 (backend limitation: people count not extracted)
+
+**Query list rendering fixed:**
+- `queryToRichData()` previously returned `undefined` for all non-finance queries → plain text only
+- Now maps `sources` array to cards based on first entry's type:
+  - `event` / `task` sources → ScheduleCard with all items listed
+  - `journal` sources → JournalCard with highlights
+  - Everything else → NoteCard with bullet list of raw_text previews
+
+---
+
+## March 14, 2026 — Auth Protection, Request Access Flow, /chat Route
+
+### `/chat` route
+- Created `frontend/src/app/chat/page.tsx` that re-exports from `experiments/zen/page.tsx`
+- `/experiments/zen` still works; all edits go to the zen file and reflect at `/chat`
+
+### `frontend/src/middleware.ts` — **NEW**
+- Protects all routes except `/`, `/login`, `/signup`
+- Uses Supabase SSR session check on every request
+- Unauthenticated requests redirected to `/login?next=<original-path>`
+- Login page reads `?next` param and sends user back to where they were going
+
+### `frontend/src/app/(auth)/login/page.tsx` — **UPDATED**
+- After successful login → redirect to `/chat` (was `/dashboard`)
+- Reads `?next` search param so deep links work after redirect
+
+### `frontend/src/app/(auth)/signup/page.tsx` — **REWRITTEN**
+- Replaced real Supabase signup with "Request Access" waitlist form
+- Fields: email (required) + message/reason (optional)
+- On submit → `POST /api/request-access` → email notification sent to owner
+- Success state: checkmark + "You're on the list" confirmation
+
+### `frontend/src/app/api/request-access/route.ts` — **NEW**
+- Next.js API route handling waitlist submissions
+- Sends notification email via Resend API (`RESEND_API_KEY`)
+- Destination address from `WAITLIST_NOTIFY_EMAIL` env var
+- Graceful fallback: if env vars missing, logs to console and returns 200 (never blocks user)
+
+### `frontend/.env.local.example` — **UPDATED**
+- Added `WAITLIST_NOTIFY_EMAIL=you@example.com`
+- Added `RESEND_API_KEY=re_xxxxxxxx`
+
+### Setup required
+1. Add to `frontend/.env.local`:
+   ```
+   WAITLIST_NOTIFY_EMAIL=your@email.com
+   RESEND_API_KEY=re_your_key_here
+   ```
+2. Sign up at resend.com, verify your sending domain (or use their sandbox for testing)
+
+---
+
 ## March 14, 2026 — Query "Tomorrow" + Event vs Task Classification Fix
 
 ### Root cause
