@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
     Mic, Send, Pause, Sparkles,
     CreditCard, CheckCircle2, HeartPulse,
-    Briefcase, Clock, FileText,
+    Briefcase, Clock, FileText, Plane,
 } from "lucide-react";
 import { ingestEntry, queryEntries, transcribeAudio } from "@/lib/api-client";
 import type { IngestResponse, QueryResponse } from "@/types";
@@ -13,16 +13,24 @@ import type { IngestResponse, QueryResponse } from "@/types";
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
 interface RichData {
-    type: "expense" | "summary" | "schedule" | "health" | "note" | "journal";
+    type: "expense" | "summary" | "schedule" | "travel" | "health" | "note" | "journal";
     // expense
     amount?: string;
     merchant?: string;
+    splitWith?: string;
+    splitAmount?: string;
     // summary
     totalAmount?: string;
     count?: number;
     stats?: Array<{ label: string; value: string; color?: string }>;
     // schedule
     items?: Array<{ label: string; time: string }>;
+    // travel
+    from?: string;
+    to?: string;
+    travelTime?: string;
+    airline?: string;
+    flightNumber?: string;
     // health
     steps?: string;
     sleep?: string;
@@ -75,16 +83,56 @@ function isQuery(text: string): boolean {
     );
 }
 
+const _TRAVEL_WORDS = ["travel", "traveling", "travelling", "flight", "fly", "flying", "trip", "drive", "driving", "train", "bus", "heading to", "going to"];
+
+function _isTravelEntry(raw: string, f: Record<string, unknown>): boolean {
+    const lower = raw.toLowerCase();
+    return _TRAVEL_WORDS.some((w) => lower.includes(w)) || !!(f.title as string)?.toLowerCase().match(/travel|flight|trip|fly/);
+}
+
+// Extract "City A to City B" from text like "traveling from Phoenix to India"
+function _extractRoute(raw: string, f: Record<string, unknown>): { from: string; to: string } | null {
+    // Try extracted title first
+    const title = (f.title as string) || "";
+    const fromToMatch = (title + " " + raw).match(/from\s+([A-Z][a-zA-Z\s]+?)\s+to\s+([A-Z][a-zA-Z\s]+?)(?:\s+(?:tomorrow|today|on|at|and|\.|$))/i);
+    if (fromToMatch) return { from: fromToMatch[1].trim(), to: fromToMatch[2].trim() };
+    // "X to Y" pattern
+    const simpleMatch = raw.match(/([A-Z][a-zA-Z]+)\s+to\s+([A-Z][a-zA-Z]+)/);
+    if (simpleMatch) return { from: simpleMatch[1], to: simpleMatch[2] };
+    return null;
+}
+
 function ingestToRichData(response: IngestResponse): RichData | undefined {
     const f = response.extracted_fields as Record<string, unknown>;
 
     if (response.type === "finance") {
-        const amount = f.amount != null ? `$${Number(f.amount).toFixed(2)}` : "";
+        const rawAmount = f.amount != null ? Number(f.amount) : null;
+        const amount = rawAmount != null ? `$${rawAmount.toFixed(2)}` : "";
         const merchant = (f.merchant as string) || (f.category as string) || "Purchase";
-        return { type: "expense", amount, merchant };
+        // Detect split: person mentioned + "split" in raw_text
+        const raw = response.raw_text.toLowerCase();
+        const person = (f.person as string) || undefined;
+        const hasSplit = raw.includes("split") || raw.includes("shared") || raw.includes("between");
+        const splitWith = hasSplit && person ? person : undefined;
+        const splitAmount = splitWith && rawAmount != null ? `$${(rawAmount / 2).toFixed(2)}` : undefined;
+        return { type: "expense", amount, merchant, splitWith, splitAmount };
     }
 
     if (response.type === "task" || response.type === "event") {
+        // Detect travel entries and show TravelCard
+        if (_isTravelEntry(response.raw_text, f)) {
+            const route = _extractRoute(response.raw_text, f);
+            const label = (f.title as string) || response.raw_text.slice(0, 60);
+            const rawTime = (f.scheduled_at as string) || (f.deadline as string) || "";
+            return {
+                type: "travel",
+                from: route?.from,
+                to: route?.to,
+                travelTime: rawTime ? formatTime(rawTime) : undefined,
+                body: label,
+                tags: Array.isArray(response.tags) ? response.tags : [],
+            };
+        }
         const label = (f.action as string) || (f.title as string) || response.raw_text.slice(0, 60);
         const rawTime = (f.scheduled_at as string) || (f.deadline as string) || "";
         const time = rawTime ? formatTime(rawTime) : "Scheduled";
@@ -135,6 +183,10 @@ function ingestToRichData(response: IngestResponse): RichData | undefined {
 }
 
 function ingestToCategory(response: IngestResponse): string {
+    const f = response.extracted_fields as Record<string, unknown>;
+    if ((response.type === "task" || response.type === "event") && _isTravelEntry(response.raw_text, f)) {
+        return "TRAVEL";
+    }
     const map: Record<string, string> = {
         finance: "EXPENSE", task: "TASK", event: "EVENT",
         journal: "JOURNAL", health: "HEALTH", note: "NOTE", general: "NOTE",
@@ -215,7 +267,7 @@ function queryToRichData(response: QueryResponse): RichData | undefined {
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
-    EXPENSE: "#ff6b6b", TASK: "#4ecdc4", EVENT: "#a66cff",
+    EXPENSE: "#ff6b6b", TASK: "#4ecdc4", EVENT: "#a66cff", TRAVEL: "#ec4899",
     JOURNAL: "#f59e0b", HEALTH: "#10b981", NOTE: "#95a5a6", QUERY: "#3b82f6",
 };
 
@@ -223,26 +275,30 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 function ExpenseCard({ data }: { data: RichData }) {
     return (
-        <div className="w-full bg-white border border-[#e5e5e5]/50 rounded-3xl p-5 shadow-sm space-y-4">
+        <div className="w-full bg-white border border-[#e5e5e5]/50 rounded-3xl p-5 shadow-sm space-y-3">
             <div className="flex items-center gap-2">
                 <div className="p-2 rounded-xl bg-[#faf9f6] text-[#ff6b6b]">
                     <CreditCard size={16} />
                 </div>
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#737373]/40">Finance</span>
-            </div>
-            <div className="flex justify-between items-end">
-                <div className="flex flex-col gap-0.5">
-                    <span className="text-[13px] text-[#737373]">You paid</span>
-                    <span className="text-3xl font-light text-[#1a1a1a] tracking-tight">{data.amount}</span>
-                </div>
-                <div className="text-right">
-                    <span className="text-[11px] text-[#737373]/50 block mb-1">at</span>
-                    <span className="text-base font-medium text-[#1a1a1a]">{data.merchant}</span>
+                <div>
+                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#737373]/40">Finance</span>
+                    {data.merchant && <p className="text-[14px] font-medium text-[#1a1a1a] leading-tight">{data.merchant}</p>}
                 </div>
             </div>
-            <div className="flex items-center gap-2 pt-1 border-t border-[#e5e5e5]/30">
-                <div className="w-1.5 h-1.5 rounded-full bg-[#ff6b6b]" />
-                <span className="text-[10px] text-[#737373]/50 font-medium uppercase tracking-widest">Tracked in expenses</span>
+            {data.splitWith && (
+                <p className="text-[12px] text-[#737373]">With {data.splitWith} · Split bill tracked</p>
+            )}
+            <div className="p-4 rounded-2xl bg-[#1a1a1a] text-white flex justify-between items-end">
+                <div>
+                    <span className="text-[9px] font-bold uppercase tracking-[0.2em] opacity-40 block mb-1">You Paid</span>
+                    <span className="text-3xl font-light tracking-tight">{data.amount}</span>
+                </div>
+                {data.splitWith && data.splitAmount && (
+                    <div className="text-right">
+                        <span className="text-[10px] opacity-50 block mb-0.5">{data.splitWith} owes you</span>
+                        <span className="text-base font-semibold text-[#4ade80]">{data.splitAmount}</span>
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -313,6 +369,56 @@ function ScheduleCard({ data }: { data: RichData }) {
                     <div className="py-3 text-[12px] text-[#737373]/40 italic text-center">Nothing scheduled</div>
                 )}
             </div>
+        </div>
+    );
+}
+
+function TravelCard({ data }: { data: RichData }) {
+    return (
+        <div className="w-full bg-white border border-[#e5e5e5]/50 rounded-3xl p-5 shadow-sm space-y-4">
+            <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-[#faf9f6] text-[#ec4899]">
+                    <Plane size={16} />
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#737373]/40">Travel</span>
+            </div>
+            {data.from && data.to ? (
+                <div className="p-4 rounded-2xl border border-[#e5e5e5]/50 bg-white">
+                    <div className="flex justify-between items-center mb-3">
+                        <div className="flex flex-col">
+                            <span className="text-2xl font-medium text-[#1a1a1a]">{data.from}</span>
+                        </div>
+                        <div className="flex-1 px-4 flex flex-col items-center gap-1">
+                            <div className="h-[1px] w-full bg-[#e5e5e5] relative">
+                                <Plane size={10} className="absolute inset-0 m-auto text-[#ec4899]" />
+                            </div>
+                        </div>
+                        <div className="flex flex-col text-right">
+                            <span className="text-2xl font-medium text-[#1a1a1a]">{data.to}</span>
+                        </div>
+                    </div>
+                    {data.travelTime && (
+                        <div className="pt-3 border-t border-[#e5e5e5]/30 flex items-center gap-2">
+                            <Clock size={11} className="text-[#737373]/50" />
+                            <span className="text-[11px] text-[#737373]/60">{data.travelTime}</span>
+                        </div>
+                    )}
+                </div>
+            ) : (
+                <div className="p-3 rounded-2xl bg-[#ec4899]/5 border border-[#ec4899]/10">
+                    <span className="text-[13px] text-[#1a1a1a]">{data.body || "Travel logged."}</span>
+                    {data.travelTime && <span className="text-[11px] text-[#737373]/60 block mt-1">{data.travelTime}</span>}
+                </div>
+            )}
+            {data.tags && data.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-1 border-t border-[#e5e5e5]/30">
+                    {data.tags.map((tag) => (
+                        <span key={tag} className="px-2.5 py-1 rounded-full bg-[#faf9f6] border border-[#e5e5e5] text-[10px] font-medium text-[#737373]">
+                            {tag}
+                        </span>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
@@ -654,6 +760,7 @@ export default function ZenModePage() {
                                     {msg.richData.type === "expense"  && <ExpenseCard  data={msg.richData} />}
                                     {msg.richData.type === "summary"  && <SummaryCard  data={msg.richData} />}
                                     {msg.richData.type === "schedule" && <ScheduleCard data={msg.richData} />}
+                                    {msg.richData.type === "travel"   && <TravelCard   data={msg.richData} />}
                                     {msg.richData.type === "health"   && <HealthCard   data={msg.richData} />}
                                     {msg.richData.type === "note"     && <NoteCard     data={msg.richData} />}
                                     {msg.richData.type === "journal"  && <JournalCard  data={msg.richData} />}
