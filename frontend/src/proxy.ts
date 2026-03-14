@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 // Public routes — no auth required
 const PUBLIC_PATHS = ["/", "/login", "/signup"];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow public routes and Next.js internals
@@ -40,9 +40,7 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const { data: { user }, error } = await supabase.auth.getUser();
-
-  console.log("[middleware]", pathname, "user:", user?.email ?? null, "error:", error?.message ?? null);
+  const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
     const loginUrl = new URL("/login", request.url);
