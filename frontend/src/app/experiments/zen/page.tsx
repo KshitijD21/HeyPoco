@@ -782,10 +782,12 @@ export default function ZenModePage() {
 
   /* ── Auth guard ─────────────────────────────────────────────────────── */
   useEffect(() => {
-    createClient().auth.getUser().then(({ data }) => {
-      if (!data.user) window.location.href = '/login'
-      else setAuthed(true)
-    })
+    createClient()
+      .auth.getUser()
+      .then(({ data }) => {
+        if (!data.user) window.location.href = '/login'
+        else setAuthed(true)
+      })
   }, [])
 
   /* ── Auto-scroll ────────────────────────────────────────────────────── */
@@ -1003,7 +1005,7 @@ export default function ZenModePage() {
 
         {/* ── Chat Area ───────────────────────────────────────────── */}
         <div
-          className="no-scrollbar relative z-0 flex-1 space-y-6 overflow-y-auto scroll-smooth px-6 py-4"
+          className="no-scrollbar relative z-0 flex-1 space-y-6 overflow-y-auto scroll-smooth px-6 pb-4 pt-20"
           ref={scrollRef}
         >
           {messages.length === 0 && !isListening && (
