@@ -90,7 +90,12 @@ async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise
 export async function transcribeAudio(audioBlob: Blob): Promise<TranscribeResponse> {
   const authHeaders = await getAuthHeaders()
   const formData = new FormData()
-  formData.append('file', audioBlob, 'recording.webm')
+  // Strip codec params (e.g. "audio/webm;codecs=opus" → "audio/webm") so the
+  // backend content-type check passes.
+  const cleanBlob = audioBlob.type.includes(';')
+    ? new Blob([audioBlob], { type: audioBlob.type.split(';')[0] })
+    : audioBlob
+  formData.append('file', cleanBlob, 'recording.webm')
 
   const response = await fetch(`${API_BASE}${apiPrefix('/api/transcribe')}`, {
     method: 'POST',

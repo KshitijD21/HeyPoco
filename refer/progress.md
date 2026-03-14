@@ -2,27 +2,73 @@
 
 ---
 
-## March 14, 2026 — Frontend Chat UI Connected to Backend
+## March 14, 2026 — Rich Cards Expanded + Journal & Health Fixes
 
-Replaced all mock data in the Zen chat UI (`/experiments/zen`) with real end-to-end API calls. The UI was fully functional visually but entirely disconnected from the backend — every response was hardcoded.
+### `frontend/src/app/experiments/zen/page.tsx` — **UPDATED**
 
-### `frontend/src/app/experiments/zen/page.tsx` — **REWRITTEN**
+**6 card types now live (was 3):**
+
+| Card | Backend type | Trigger |
+|---|---|---|
+| `ExpenseCard` | `finance` | "Spent $42 at Starbucks" |
+| `SummaryCard` | query + `finance_total > 0` | "How much did I spend this week?" |
+| `ScheduleCard` | `task` / `event` | "Remind me to call Mom tomorrow at 7pm" |
+| `HealthCard` | `health` | "I walked 10,000 steps today" |
+| `NoteCard` | `note` / `general` | "Coffee with Anirudh to discuss the project" |
+| `JournalCard` | `journal` | "Feeling great, completed Poco setup and started LeetCode" |
+
+**Card design upgraded** to match landing page (`/experiments/components`) visual language — rounded-3xl, icon header with category label, consistent spacing.
+
+**Bug fixes found during testing:**
+
+- **Health card showed fallback** — backend `ExtractedFields` has no `steps`/`sleep` fields. Fixed by parsing them from `raw_text` with regex (`\d+ steps`, `slept \d+h`)
+- **Schedule time showed raw ISO** (`2026-03-14T00:00:00-07:00`) — added `formatTime()` helper that converts ISO to locale string (`Sat, Mar 14, 12:00 AM`)
+- **Journal card showed full raw_text** including meta-phrases like "I want to journal the thing" — fixed to use `highlights` from extracted_fields first, then `notes`/`topic`, never raw_text
+- **Journal mood not shown** — card now shows mood as emoji (😊/😔/😐) top-right; falls back to "Saved to journal." when highlights are empty
+
+### `backend/app/services/extraction_service.py` — **UPDATED**
+- Added two journal-specific rules to the GPT-4o extraction prompt:
+  - Always populate `highlights` with 1–3 key things mentioned, stripping meta-phrases ("I want to journal", "just logging", etc.)
+  - Always infer `mood` (positive/negative/neutral) from tone for journal entries
+
+---
+
+## March 14, 2026 — Frontend Chat UI Connected to Backend + Voice UX Fixes
+
+Replaced all mock data in the Zen chat UI (`/experiments/zen`) with real end-to-end API calls, then fixed two bugs found during testing: query routing not working for voice input, and no auto-stop on silence.
+
+### `frontend/src/app/experiments/zen/page.tsx` — **REWRITTEN (×2)**
+
+**Session 1 — Backend connection:**
 - Removed all mock arrays (`MOCK_VOICE_LOGS`, `TEXT_REPLIES`, `getTextReply`) — ~150 lines of mock logic deleted
-- **Text flow**: `isQuery()` helper detects query vs log intent using question words and `?` suffix
+- **Text flow**: `isQuery()` helper detects query vs log intent (question words + `?` suffix)
   - Query → `POST /api/query` with `user_timezone`
   - Log → `POST /api/ingest` with `raw_text` + `user_timezone`
-- **Voice flow**: replaced simulated 3.5s timeout with real `useVoiceRecorder` hook
-  - `startRecording()` → MediaRecorder captures audio
-  - `stopRecording()` → returns WebM blob → `POST /api/ingest` with `audio_file`
-  - Transcribed `raw_text` from response shown as user message bubble
+- **Voice flow**: replaced simulated 3.5s timeout with real MediaRecorder via `useVoiceRecorder` hook
+  - `startRecording()` → captures WebM audio
+  - `stopRecording()` → blob → `POST /api/ingest` with `audio_file`
+  - Transcribed `raw_text` from response shown as user bubble
 - **Rich card mapping** from real backend responses:
-  - `finance` entry → `ExpenseCard` (amount + merchant from `extracted_fields`)
-  - `task` / `event` entry → `ScheduleCard` (action/title + scheduled_at/deadline)
+  - `finance` → `ExpenseCard` (amount + merchant from `extracted_fields`)
+  - `task` / `event` → `ScheduleCard` (action/title + scheduled_at/deadline)
   - Query with `finance_total` → `SummaryCard` (total + per-merchant breakdown from sources)
   - All other entries → plain text bubble with category pill
-- **Error state**: red-tinted bubble on API failure (auth errors, network, 5xx)
-- Auth: flows through existing `api-client.ts` → Supabase session → `Authorization: Bearer` header
-- `user_timezone` passed via `Intl.DateTimeFormat().resolvedOptions().timeZone` on every call
+- **Error state**: red-tinted bubble on API failure (auth, network, 5xx)
+- Auth via `api-client.ts` → Supabase session → `Authorization: Bearer` header
+- `user_timezone` = `Intl.DateTimeFormat().resolvedOptions().timeZone` on every call
+
+**Session 2 — Two bugs fixed:**
+
+**Bug 1 — Voice queries always ingested instead of queried:**
+- Root cause: voice path called `ingestEntry(blob)` directly — never ran `isQuery()` on the transcript
+- Fix: two-step voice pipeline — `transcribeAudio(blob)` first → show transcript as user bubble → `isQuery()` → route to `queryEntries` or `ingestEntry`
+- Also strengthened `isQuery()`: any text ending with `?` now routes to query, not just specific prefix patterns
+
+**Bug 2 — No silence detection, mic required manual stop:**
+- Replaced `useVoiceRecorder` hook with inline recording + `AudioContext` analyser loop
+- `AnalyserNode` computes RMS every animation frame; if RMS < `0.01` for 2.5s → auto-calls `stopAndProcess()`
+- Sound detected mid-silence resets the timer (debounce pattern)
+- Waveform bars now driven by live mic volume (4px quiet → 24px loud) instead of CSS animation
 
 ### `frontend/src/types/index.ts` — **UPDATED**
 - `QueryRequest`: added `user_timezone?: string` to match backend schema

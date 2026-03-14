@@ -147,6 +147,8 @@ Rules:
 - If type is unclear, use general.
 - For amounts: extract all numbers that represent money.
 - For dates: resolve relative terms using today's date provided above.
+- For journal: always populate highlights as a list of 1-3 key things the person mentioned or felt. Strip meta-phrases like "I want to journal", "just logging", "adding a note" from highlights — capture only the actual content.
+- For journal: set mood to positive/negative/neutral based on the overall tone.
 """
 
 
