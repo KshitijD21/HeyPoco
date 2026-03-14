@@ -15,6 +15,8 @@ import {
   FileText,
   Plane,
   LogOut,
+  ListTodo,
+  ChevronRight,
 } from 'lucide-react'
 import { ingestEntry, queryEntries, transcribeAudio } from '@/lib/api-client'
 import { createClient } from '@/lib/supabase/client'
@@ -23,7 +25,7 @@ import type { IngestResponse, QueryResponse } from '@/types'
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
 interface RichData {
-  type: 'expense' | 'summary' | 'schedule' | 'travel' | 'health' | 'note' | 'journal'
+  type: 'expense' | 'summary' | 'schedule' | 'task' | 'travel' | 'health' | 'note' | 'journal'
   // expense
   amount?: string
   merchant?: string
@@ -108,27 +110,18 @@ function isQuery(text: string): boolean {
 }
 
 const _TRAVEL_WORDS = [
-  'travel',
-  'traveling',
-  'travelling',
-  'flight',
-  'fly',
-  'flying',
-  'trip',
-  'drive',
-  'driving',
-  'train',
-  'bus',
-  'heading to',
-  'going to',
+  'traveling', 'travelling', 'flight', 'flying',
+  'airport', 'airline', 'departing', 'arriving',
+  'from phoenix', 'from new york', 'from london', 'from mumbai',
 ]
 
 function _isTravelEntry(raw: string, f: Record<string, unknown>): boolean {
   const lower = raw.toLowerCase()
-  return (
-    _TRAVEL_WORDS.some((w) => lower.includes(w)) ||
-    !!(f.title as string)?.toLowerCase().match(/travel|flight|trip|fly/)
-  )
+  // Must have unambiguous travel keyword AND a from/to route pattern
+  const hasRoute = /\bfrom\s+\w+.*\bto\s+\w+/i.test(raw) || !!f.scheduled_at
+  const hasTravelWord = _TRAVEL_WORDS.some((w) => lower.includes(w)) ||
+    !!(f.title as string)?.toLowerCase().match(/flight|travel/)
+  return hasTravelWord && hasRoute
 }
 
 // Extract "City A to City B" from text like "traveling from Phoenix to India"
@@ -138,13 +131,11 @@ function _extractRoute(
 ): { from: string; to: string } | null {
   // Try extracted title first
   const title = (f.title as string) || ''
+  const stopwords = 'tomorrow|today|this|next|on|at|and|by|via|the|\\.|$'
   const fromToMatch = (title + ' ' + raw).match(
-    /from\s+([A-Z][a-zA-Z\s]+?)\s+to\s+([A-Z][a-zA-Z\s]+?)(?:\s+(?:tomorrow|today|on|at|and|\.|$))/i
+    new RegExp(`from\\s+([A-Za-z][a-zA-Z ]*?)\\s+to\\s+([A-Za-z][a-zA-Z ]*?)(?:\\s+(?:${stopwords}))`, 'i')
   )
   if (fromToMatch) return { from: fromToMatch[1].trim(), to: fromToMatch[2].trim() }
-  // "X to Y" pattern
-  const simpleMatch = raw.match(/([A-Z][a-zA-Z]+)\s+to\s+([A-Z][a-zA-Z]+)/)
-  if (simpleMatch) return { from: simpleMatch[1], to: simpleMatch[2] }
   return null
 }
 
@@ -165,25 +156,32 @@ function ingestToRichData(response: IngestResponse): RichData | undefined {
     return { type: 'expense', amount, merchant, splitWith, splitAmount }
   }
 
-  if (response.type === 'task' || response.type === 'event') {
+  if (response.type === 'task') {
+    const items = response.raw_text
+      .split(/[,;]+|\band\b/)
+      .map((s) => s.replace(/^(i('m| am| will| want to|'ll)|going to|planning to|need to|have to)\s+/i, '').trim())
+      .filter((s) => s.length > 3)
+      .slice(0, 6)
+    return { type: 'task', items: items.map((label) => ({ label, time: '' })), tags: Array.isArray(response.tags) ? response.tags : [] }
+  }
+
+  if (response.type === 'event') {
     // Detect travel entries and show TravelCard
     if (_isTravelEntry(response.raw_text, f)) {
       const route = _extractRoute(response.raw_text, f)
-      const label = (f.title as string) || response.raw_text.slice(0, 60)
       const rawTime = (f.scheduled_at as string) || (f.deadline as string) || ''
       return {
         type: 'travel',
         from: route?.from,
         to: route?.to,
         travelTime: rawTime ? formatTime(rawTime) : undefined,
-        body: label,
+        body: (f.title as string) || response.raw_text.slice(0, 60),
         tags: Array.isArray(response.tags) ? response.tags : [],
       }
     }
-    const label = (f.action as string) || (f.title as string) || response.raw_text.slice(0, 60)
+    const label = (f.title as string) || (f.action as string) || response.raw_text.slice(0, 60)
     const rawTime = (f.scheduled_at as string) || (f.deadline as string) || ''
-    const time = rawTime ? formatTime(rawTime) : 'Scheduled'
-    return { type: 'schedule', items: [{ label, time }] }
+    return { type: 'schedule', items: [{ label, time: rawTime ? formatTime(rawTime) : 'Scheduled' }] }
   }
 
   if (response.type === 'health') {
@@ -233,10 +231,7 @@ function ingestToRichData(response: IngestResponse): RichData | undefined {
 
 function ingestToCategory(response: IngestResponse): string {
   const f = response.extracted_fields as Record<string, unknown>
-  if (
-    (response.type === 'task' || response.type === 'event') &&
-    _isTravelEntry(response.raw_text, f)
-  ) {
+  if (response.type === 'event' && _isTravelEntry(response.raw_text, f)) {
     return 'TRAVEL'
   }
   const map: Record<string, string> = {
@@ -456,6 +451,39 @@ function ScheduleCard({ data }: { data: RichData }) {
   )
 }
 
+function TaskCard({ data }: { data: RichData }) {
+  return (
+    <div className="w-full space-y-3 rounded-3xl border border-[#e5e5e5]/50 bg-white p-5 shadow-sm">
+      <div className="flex items-center gap-2">
+        <div className="rounded-xl bg-[#faf9f6] p-2 text-[#f43f5e]">
+          <ListTodo size={16} />
+        </div>
+        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#737373]/40">
+          Tasks
+        </span>
+      </div>
+      <div className="space-y-2">
+        {data.items?.map((item, i) => (
+          <div key={i} className="flex items-center gap-3 rounded-xl border border-[#e5e5e5]/50 p-3">
+            <div className="h-2 w-2 shrink-0 rounded-full bg-[#f43f5e]" />
+            <span className="flex-1 text-[13px] text-[#1a1a1a]">{item.label}</span>
+            <ChevronRight size={14} className="text-[#e5e5e5]" />
+          </div>
+        ))}
+      </div>
+      {data.tags && data.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 border-t border-[#e5e5e5]/30 pt-1">
+          {data.tags.map((tag) => (
+            <span key={tag} className="rounded-full border border-[#e5e5e5] bg-[#faf9f6] px-2.5 py-1 text-[10px] font-medium text-[#737373]">
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function TravelCard({ data }: { data: RichData }) {
   return (
     <div className="w-full space-y-4 rounded-3xl border border-[#e5e5e5]/50 bg-white p-5 shadow-sm">
@@ -475,7 +503,7 @@ function TravelCard({ data }: { data: RichData }) {
             </div>
             <div className="flex flex-1 flex-col items-center gap-1 px-4">
               <div className="relative h-[1px] w-full bg-[#e5e5e5]">
-                <Plane size={10} className="absolute inset-0 m-auto text-[#ec4899]" />
+                <Plane size={14} className="absolute inset-0 m-auto text-[#ec4899]" />
               </div>
             </div>
             <div className="flex flex-col text-right">
@@ -1041,6 +1069,7 @@ export default function ZenModePage() {
                   {msg.richData.type === 'expense' && <ExpenseCard data={msg.richData} />}
                   {msg.richData.type === 'summary' && <SummaryCard data={msg.richData} />}
                   {msg.richData.type === 'schedule' && <ScheduleCard data={msg.richData} />}
+                  {msg.richData.type === 'task' && <TaskCard data={msg.richData} />}
                   {msg.richData.type === 'travel' && <TravelCard data={msg.richData} />}
                   {msg.richData.type === 'health' && <HealthCard data={msg.richData} />}
                   {msg.richData.type === 'note' && <NoteCard data={msg.richData} />}
