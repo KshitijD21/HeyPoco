@@ -317,7 +317,7 @@ HeyPoco/
 ### Setup
 
 ```bash
-git clone https://github.com/anirudh3699/HeyPoco.git
+git clone https://github.com/KshitijD21/HeyPoco.git
 cd HeyPoco
 
 # Backend
